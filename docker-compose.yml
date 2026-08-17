@@ -1,12 +1,12 @@
 networks:
-  sentinelcore:
+  sentinelcore-network:
     driver: bridge
 
 volumes:
   postgres_data:
 
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
     env_file: .env
     environment:
@@ -23,23 +23,23 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - sentinelcore
+      - sentinelcore-network
 
   backend:
     build:
       context: ./backend
     env_file: .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     volumes:
       - ./backend:/app
     expose:
       - "8000"
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
     networks:
-      - sentinelcore
+      - sentinelcore-network
 
   frontend:
     build:
@@ -52,7 +52,7 @@ services:
     depends_on:
       - backend
     networks:
-      - sentinelcore
+      - sentinelcore-network
 
   nginx:
     image: nginx:1.27-alpine
@@ -64,4 +64,4 @@ services:
       - backend
       - frontend
     networks:
-      - sentinelcore
+      - sentinelcore-network
