@@ -1,16 +1,33 @@
 FROM python:3.11-slim
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
+# build-essential is needed to compile argon2-cffi's bindings on slim images.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential
 
 COPY . .
 
-RUN useradd -m -u 1000 appuser \
+# GID 2000 must match the `sentinelcore` group in helper/Dockerfile — that is
+# what grants this container access to the 0660 root:sentinelcore helper
+# socket. Group membership is the whole authorization mechanism here.
+RUN groupadd -g 2000 sentinelcore \
+    && chmod +x /app/entrypoint.sh \
+    && useradd -m -u 1000 -G sentinelcore appuser \
     && chown -R appuser:appuser /app
+
+# CLAUDE.md: the API never runs as root.
 USER appuser
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

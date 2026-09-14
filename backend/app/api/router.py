@@ -1,0 +1,19 @@
+"""Aggregate router mounted at /api.
+
+The `/api` prefix lives here rather than in nginx so that the paths the
+backend serves are byte-identical to the paths the browser requests — which is
+what makes the refresh cookie's `path=/api/auth` scoping work.
+"""
+
+from fastapi import APIRouter
+
+from app.api.routes import assets, auth, health, pipeline, sensor, users
+
+api_router = APIRouter(prefix="/api")
+
+api_router.include_router(health.router)
+api_router.include_router(auth.router)
+api_router.include_router(users.router)
+api_router.include_router(assets.router)
+api_router.include_router(sensor.router)
+api_router.include_router(pipeline.router)
