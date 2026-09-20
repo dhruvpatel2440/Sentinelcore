@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -oX - -n -T3 -sS --open -p 22,80,443,3306 192.168.10.0/24" start="1726300000" version="7.94">
+  <scaninfo type="syn" protocol="tcp" numservices="4" services="22,80,443,3306"/>
+  <host starttime="1726300001" endtime="1726300010">
+    <status state="up" reason="arp-response"/>
+    <address addr="192.168.10.5" addrtype="ipv4"/>
+    <address addr="00:1a:2b:3c:4d:5e" addrtype="mac" vendor="Cisco Systems"/>
+    <hostnames>
+      <hostname name="gateway.lan" type="PTR"/>
+    </hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" product="OpenSSH" version="8.9p1"/>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="nginx" version="1.24.0"/>
+      </port>
+      <port protocol="tcp" portid="3306">
+        <state state="filtered" reason="no-response"/>
+        <service name="mysql"/>
+      </port>
+    </ports>
+    <os>
+      <osmatch name="Linux 5.15 - 6.1" accuracy="94"/>
+      <osmatch name="Linux 4.19" accuracy="88"/>
+    </os>
+  </host>
+  <host starttime="1726300002" endtime="1726300011">
+    <status state="up" reason="syn-ack"/>
+    <address addr="192.168.10.42" addrtype="ipv4"/>
+    <hostnames/>
+    <ports>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack"/>
+        <service name="https"/>
+      </port>
+      <port protocol="udp" portid="53">
+        <state state="open|filtered" reason="no-response"/>
+        <service name="domain"/>
+      </port>
+    </ports>
+  </host>
+  <host starttime="1726300003" endtime="1726300012">
+    <status state="down" reason="no-response"/>
+    <address addr="192.168.10.99" addrtype="ipv4"/>
+  </host>
+  <runstats>
+    <finished time="1726300015" elapsed="15.02"/>
+    <hosts up="2" down="1" total="3"/>
+  </runstats>
+</nmaprun>

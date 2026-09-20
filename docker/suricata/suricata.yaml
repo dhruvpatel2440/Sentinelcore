@@ -1,0 +1,200 @@
+%YAML 1.1
+---
+# SentinelCore Suricata configuration (M4).
+#
+# HOME_NET must match MONITORED_NETWORK in .env. It is set literally here
+# rather than interpolated because Suricata does not expand environment
+# variables in this file — changing the monitored network means editing both.
+
+vars:
+  address-groups:
+    HOME_NET: "[192.168.56.0/24]"
+    EXTERNAL_NET: "!$HOME_NET"
+
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "$HOME_NET"
+
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
+    GENEVE_PORTS: 6081
+    VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
+
+default-log-dir: /var/log/suricata/
+
+stats:
+  enabled: yes
+  # 30s matches the backend's EVE_STALE_SECONDS threshold (3 missed intervals).
+  interval: 30
+
+outputs:
+  - fast:
+      enabled: no
+
+  # EVE JSON is the contract with M5's pipeline. `alert` alone is not enough:
+  # M5 correlates alerts to flows, and M12 enriches from dns/http/tls.
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      # Rotation is handled externally by logrotate with `copytruncate`
+      # (see docker/suricata/logrotate.conf). M5's tailer tracks (st_dev,
+      # st_ino) and also detects truncation, so it survives either mechanism.
+      rotate-interval: day
+      pcap-file: false
+      community-id: true
+      community-id-seed: 0
+      types:
+        - alert:
+            payload: yes
+            payload-buffer-size: 4kb
+            payload-printable: yes
+            packet: yes
+            metadata: yes
+            http-body: yes
+            tagged-packets: yes
+        - flow
+        - dns:
+            enabled: yes
+            version: 2
+        - http:
+            extended: yes
+        - tls:
+            extended: yes
+        - stats:
+            totals: yes
+            threads: no
+            deltas: no
+
+  - stats:
+      enabled: no
+
+logging:
+  default-log-level: notice
+  outputs:
+    - console:
+        enabled: yes
+    - file:
+        enabled: yes
+        level: info
+        filename: /var/log/suricata/suricata.log
+
+af-packet:
+  - interface: enp0s8
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    mmap-locked: no
+    tpacket-v3: yes
+    ring-size: 2048
+    block-size: 32768
+    buffer-size: 64535
+    checksum-checks: kernel
+
+  - interface: default
+    threads: auto
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+
+# Bounded so a traffic spike cannot exhaust host memory.
+max-pending-packets: 1024
+
+runmode: autofp
+autofp-scheduler: hash
+
+default-packet-size: 1514
+
+unix-command:
+  # Required for `suricatasc -c ruleset-reload-nonblocking`, which is how the
+  # helper reloads rules without dropping packets.
+  enabled: yes
+  filename: /var/run/suricata/suricata-command.socket
+
+legacy:
+  uricontent: enabled
+
+app-layer:
+  protocols:
+    tls:
+      enabled: yes
+      detection-ports:
+        dp: "443,993,995,465"
+    http:
+      enabled: yes
+      libhtp:
+        default-config:
+          personality: IDS
+          request-body-limit: 100kb
+          response-body-limit: 100kb
+    dns:
+      tcp:
+        enabled: yes
+        detection-ports:
+          dp: 53
+      udp:
+        enabled: yes
+        detection-ports:
+          dp: 53
+    ssh:
+      enabled: yes
+    smtp:
+      enabled: yes
+    ftp:
+      enabled: yes
+
+defrag:
+  memcap: 32mb
+  trackers: 65535
+  max-frags: 65535
+  prealloc: yes
+  timeout: 60
+
+flow:
+  memcap: 128mb
+  hash-size: 65536
+  prealloc: 10000
+  emergency-recovery: 30
+
+stream:
+  memcap: 64mb
+  checksum-validation: yes
+  inspection-recovery: yes
+  reassembly:
+    memcap: 256mb
+    depth: 1mb
+    toserver-chunk-size: 2560
+    toclient-chunk-size: 2560
+    randomize-chunk-size: yes
+
+host:
+  hash-size: 4096
+  prealloc: 1000
+  memcap: 32mb
+
+# The helper writes composed rules into this directory after validating them.
+default-rule-path: /var/lib/suricata/rules
+rule-files:
+  - sentinelcore.rules
+
+classification-file: /etc/suricata/classification.config
+reference-config-file: /etc/suricata/reference.config
+
+# Suricata refuses to start when rule-files reference a missing file. This
+# keeps a fresh stack bootable before the first rule update runs.
+engine-analysis:
+  rules-fast-pattern: yes
+  rules: yes

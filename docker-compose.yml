@@ -4,6 +4,14 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:
+  # Carries the privileged helper's Unix socket between helper and backend.
+  helper_socket:
+  # Composed rule files the backend stages and the helper verifies (M4).
+  rule_staging:
+  suricata_rules:
+  suricata_logs:
+  suricata_run:
 
 services:
   db:
@@ -16,7 +24,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # 5433 on the host: a system PostgreSQL commonly owns 5432. Containers
+      # reach this one as `db:5432` over sentinelcore-network regardless, so
+      # this mapping only exists for host-side psql/tooling.
+      # Bound to loopback so the database is never exposed off-box.
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -25,19 +37,116 @@ services:
     networks:
       - sentinelcore-network
 
+  redis:
+    image: redis:7.4-alpine
+    # appendonly keeps the M5 pipeline's persisted read offset across restarts.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - sentinelcore-network
+
+  # The privilege boundary. This is the ONLY container holding raw-socket
+  # capability. It runs as root but with a two-capability allowlist — never
+  # `privileged: true`, which would grant everything.
+  helper:
+    build:
+      context: ./helper
+    env_file: .env
+    cap_drop:
+      - ALL
+    cap_add:
+      # NET_RAW/NET_ADMIN: nmap SYN scanning and Scapy ARP need raw sockets.
+      # This is the capability the backend deliberately does not have.
+      - NET_ADMIN
+      - NET_RAW
+      # SYS_NICE: Suricata sets thread priorities for its capture threads.
+      - SYS_NICE
+      # CHOWN: to set the socket to root:sentinelcore so only the backend's
+      # group can open it. Without it the socket would be left root:root.
+      - CHOWN
+    volumes:
+      - helper_socket:/run/sentinelcore
+      - suricata_rules:/var/lib/suricata/rules
+      - rule_staging:/var/lib/sentinelcore/staging
+      - suricata_logs:/var/log/suricata
+      - suricata_run:/var/run/suricata
+      - ./docker/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+    restart: unless-stopped
+    # host networking is required for discovery AND for Suricata to see real
+    # traffic: nmap needs a route to the monitored LAN, the ARP sweep needs its
+    # broadcast domain, and af-packet capture needs the real interface.
+    # A bridge network would only ever show other containers.
+    #
+    # This does NOT widen the API's exposure. The helper still publishes no
+    # port and is reachable only through the 0660 Unix socket on the shared
+    # volume; host networking gives it visibility, not reachability.
+    network_mode: host
+
   backend:
     build:
       context: ./backend
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      HELPER_SOCKET_PATH: /run/sentinelcore/helper.sock
     volumes:
       - ./backend:/app
+      - helper_socket:/run/sentinelcore
+      - rule_staging:/var/lib/sentinelcore/staging
+      - suricata_logs:/var/log/suricata:ro
+    # CLAUDE.md: the API runs unprivileged. It gets NO network capabilities —
+    # nmap/ARP work is delegated to `helper` over the socket above.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     expose:
       - "8000"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sentinelcore-network
+
+  # M5 — the event pipeline, deliberately a SEPARATE container from the API
+  # sharing the same image. The API must never tail a file in a background
+  # thread: an API restart would lose the reader position, and multiple API
+  # replicas would each tail the same file and duplicate every event.
+  worker:
+    build:
+      context: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      # Only the API runs migrations; two concurrent `alembic upgrade head`
+      # processes race on the same schema.
+      RUN_MIGRATIONS: "false"
+    command: ["python", "-m", "app.pipeline.worker"]
+    volumes:
+      - ./backend:/app
+      # READ-ONLY: the pipeline reads the sensor's output and must never be
+      # able to alter or truncate it.
+      - suricata_logs:/var/log/suricata:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     networks:
       - sentinelcore-network
 
