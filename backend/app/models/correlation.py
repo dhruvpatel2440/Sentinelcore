@@ -121,8 +121,11 @@ class IncidentCandidate(Base):
         default=CandidateStatus.NEW,
     )
     # No FK to `incidents` yet — that table does not exist until M8. M8's
-    # migration adds the constraint once it does.
-    incident_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True, unique=True)
+    # migration adds the constraint once it does. NOT unique: a merge links
+    # multiple candidates onto the same incident over time, so this is a
+    # plain many-to-one reference. (`incidents.candidate_id` is the unique
+    # side — an incident traces back to at most one *originating* candidate.)
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
 
     suppressed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     suppressed_by: Mapped[uuid.UUID | None] = mapped_column(

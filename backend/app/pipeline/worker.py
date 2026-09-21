@@ -23,6 +23,7 @@ from app.pipeline.partitions import ensure_partitions
 from app.pipeline.retention import enforce_retention
 from app.pipeline.tailer import EveTailer
 from app.pipeline.writer import EventWriter
+from app.services.promotion import run_forever as run_promotion_subscriber
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,6 +88,7 @@ async def main() -> int:
         asyncio.create_task(writer.run(), name="writer"),
         asyncio.create_task(maintenance_loop(stop), name="maintenance"),
         asyncio.create_task(run_correlation_engine(SessionLocal, redis, stop), name="correlation"),
+        asyncio.create_task(run_promotion_subscriber(SessionLocal, redis, stop), name="promotion"),
     ]
 
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

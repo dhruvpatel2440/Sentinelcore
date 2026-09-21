@@ -2,6 +2,14 @@ from app.models.asset import Asset, AssetPort, PortState, Protocol
 from app.models.audit_log import AuditLog
 from app.models.correlation import CandidateStatus, CorrelationRule, IncidentCandidate, RuleRun, RuleType
 from app.models.event import Event, EventType, Severity
+from app.models.incident import (
+    HistoryAction,
+    Incident,
+    IncidentEvent,
+    IncidentHistory,
+    IncidentStatus,
+    TERMINAL_STATUSES,
+)
 from app.models.saved_search import SavedSearch
 from app.models.scan import Scan, ScanStatus, ScanType
 from app.models.sensor import (
@@ -25,6 +33,12 @@ __all__ = [
     "Event",
     "EventType",
     "Severity",
+    "HistoryAction",
+    "Incident",
+    "IncidentEvent",
+    "IncidentHistory",
+    "IncidentStatus",
+    "TERMINAL_STATUSES",
     "PortState",
     "Protocol",
     "OverrideAction",

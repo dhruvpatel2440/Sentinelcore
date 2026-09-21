@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     correlation_max_concurrent_rules: int = 4
     correlation_candidates_channel: str = "correlation:candidates"
 
+    # M8 — incident promotion
+    auto_promote_score: int = 70  # roughly the "high"/"critical" band
+    incident_merge_window_minutes: int = 60
+
     # Deployment
     environment: str = "development"
 

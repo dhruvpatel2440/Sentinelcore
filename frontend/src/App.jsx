@@ -4,6 +4,8 @@ import Layout from "./layout/Layout";
 import AssetsPage from "./pages/assets/AssetsPage";
 import CorrelationPage from "./pages/correlation/CorrelationPage";
 import EventsPage from "./pages/events/EventsPage";
+import IncidentDetail from "./pages/incidents/IncidentDetail";
+import IncidentsPage from "./pages/incidents/IncidentsPage";
 import LoginPage from "./pages/LoginPage";
 import SensorPage from "./pages/sensor/SensorPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -43,17 +45,8 @@ export default function App() {
 
           <Route path="correlation" element={<CorrelationPage />} />
 
-          <Route
-            path="incidents"
-            element={
-              <Placeholder
-                title="Incidents"
-                description="Triage queue for correlated activity."
-                milestone="M8"
-                capabilities={["Correlated event grouping", "Assignment and resolution workflow"]}
-              />
-            }
-          />
+          <Route path="incidents" element={<IncidentsPage />} />
+          <Route path="incidents/:number" element={<IncidentDetail />} />
 
           <Route
             path="intel"
