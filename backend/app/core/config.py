@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     max_search_window_days: int = 30
     search_facet_cache_seconds: int = 30
 
+    # M7 — correlation engine
+    correlation_interval_seconds: int = 30
+    correlation_lookback_grace_seconds: int = 60
+    correlation_rule_timeout_seconds: int = 60
+    correlation_max_concurrent_rules: int = 4
+    correlation_candidates_channel: str = "correlation:candidates"
+
     # Deployment
     environment: str = "development"
 

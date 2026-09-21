@@ -1,5 +1,6 @@
 from app.models.asset import Asset, AssetPort, PortState, Protocol
 from app.models.audit_log import AuditLog
+from app.models.correlation import CandidateStatus, CorrelationRule, IncidentCandidate, RuleRun, RuleType
 from app.models.event import Event, EventType, Severity
 from app.models.saved_search import SavedSearch
 from app.models.scan import Scan, ScanStatus, ScanType
@@ -16,6 +17,11 @@ __all__ = [
     "Asset",
     "AssetPort",
     "AuditLog",
+    "CandidateStatus",
+    "CorrelationRule",
+    "IncidentCandidate",
+    "RuleRun",
+    "RuleType",
     "Event",
     "EventType",
     "Severity",

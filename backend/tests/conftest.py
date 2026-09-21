@@ -10,10 +10,23 @@ from __future__ import annotations
 from ipaddress import ip_network
 
 import pytest
+import pytest_asyncio
 
 from app.core.config import settings
+from app.db.session import engine
 
 TEST_MONITORED_NETWORK = ip_network("192.168.10.0/24")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_engine_after_test():
+    """pytest-asyncio hands each test function its own event loop, but
+    `app.db.session.engine` (and its asyncpg connection pool) is created once
+    at import time. A connection checked out under one test's loop is unusable
+    once that loop closes — disposing the pool after every test forces the
+    next DB-touching test to open a fresh connection on its own loop."""
+    yield
+    await engine.dispose()
 
 
 @pytest.fixture(autouse=True)

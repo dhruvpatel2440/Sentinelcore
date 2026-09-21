@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import Layout from "./layout/Layout";
 import AssetsPage from "./pages/assets/AssetsPage";
+import CorrelationPage from "./pages/correlation/CorrelationPage";
 import EventsPage from "./pages/events/EventsPage";
 import LoginPage from "./pages/LoginPage";
 import SensorPage from "./pages/sensor/SensorPage";
@@ -39,6 +40,8 @@ export default function App() {
           <Route path="assets" element={<AssetsPage />} />
 
           <Route path="events" element={<EventsPage />} />
+
+          <Route path="correlation" element={<CorrelationPage />} />
 
           <Route
             path="incidents"
