@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import Layout from "./layout/Layout";
 import AssetsPage from "./pages/assets/AssetsPage";
+import EventsPage from "./pages/events/EventsPage";
 import LoginPage from "./pages/LoginPage";
 import SensorPage from "./pages/sensor/SensorPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -37,17 +38,7 @@ export default function App() {
 
           <Route path="assets" element={<AssetsPage />} />
 
-          <Route
-            path="events"
-            element={
-              <Placeholder
-                title="Events"
-                description="Normalized detections from the Suricata sensor."
-                milestone="M5 + M6"
-                capabilities={["EVE JSON ingest pipeline", "Full-text and field search"]}
-              />
-            }
-          />
+          <Route path="events" element={<EventsPage />} />
 
           <Route
             path="incidents"

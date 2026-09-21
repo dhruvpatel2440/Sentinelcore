@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # Pipeline
     event_retention_days: int = 90
 
+    # M6 — event search
+    max_search_window_days: int = 30
+    search_facet_cache_seconds: int = 30
+
     # Deployment
     environment: str = "development"
 

@@ -1,6 +1,7 @@
 from app.models.asset import Asset, AssetPort, PortState, Protocol
 from app.models.audit_log import AuditLog
 from app.models.event import Event, EventType, Severity
+from app.models.saved_search import SavedSearch
 from app.models.scan import Scan, ScanStatus, ScanType
 from app.models.sensor import (
     OverrideAction,
@@ -23,6 +24,7 @@ __all__ = [
     "OverrideAction",
     "RuleOverride",
     "RuleSource",
+    "SavedSearch",
     "Scan",
     "ScanStatus",
     "ScanType",

@@ -8,6 +8,7 @@ from app.db.base import Base  # noqa: F401
 from app.models.asset import Asset, AssetPort  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.event import Event  # noqa: F401
+from app.models.saved_search import SavedSearch  # noqa: F401
 from app.models.scan import Scan  # noqa: F401
 from app.models.sensor import RuleOverride, RuleSource, SensorEvent  # noqa: F401
 from app.models.user import User  # noqa: F401

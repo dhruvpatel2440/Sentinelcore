@@ -7,7 +7,7 @@ what makes the refresh cookie's `path=/api/auth` scoping work.
 
 from fastapi import APIRouter
 
-from app.api.routes import assets, auth, health, pipeline, sensor, users
+from app.api.routes import assets, auth, events, health, pipeline, sensor, users
 
 api_router = APIRouter(prefix="/api")
 
@@ -17,3 +17,4 @@ api_router.include_router(users.router)
 api_router.include_router(assets.router)
 api_router.include_router(sensor.router)
 api_router.include_router(pipeline.router)
+api_router.include_router(events.router)

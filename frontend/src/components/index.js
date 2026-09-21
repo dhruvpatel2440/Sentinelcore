@@ -1,6 +1,7 @@
 export { default as Badge } from "./Badge";
 export { default as Button } from "./Button";
 export { default as Card } from "./Card";
+export { default as Drawer } from "./Drawer";
 export { default as EmptyState } from "./EmptyState";
 export { default as ErrorBoundary } from "./ErrorBoundary";
 export { default as Modal } from "./Modal";
