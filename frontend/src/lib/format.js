@@ -39,3 +39,24 @@ export function duration(seconds) {
   const rest = Math.round(seconds % 60);
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
 }
+
+/** "4.2 MB". Used by M9 report sizes and M11 capture/flow byte counts. */
+export function formatBytes(bytes) {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+/** "1m 30ms" scale but for millisecond durations (M11 flow duration_ms). */
+export function durationMs(ms) {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  return duration(ms / 1000);
+}

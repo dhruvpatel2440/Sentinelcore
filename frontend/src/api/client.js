@@ -157,6 +157,59 @@ export async function downloadFile(path) {
   return { blob: await res.blob(), filename: match?.[1] || "download" };
 }
 
+/**
+ * Uploads a file with real progress reporting (M11 PCAP upload). Needs XHR
+ * rather than `fetch` because `fetch` has no upload-progress event. Shares
+ * the same single-retry-on-401 behavior as `request()`.
+ */
+export function uploadFile(path, file, { onProgress, signal } = {}) {
+  const attempt = () =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${BASE}${path}`);
+      xhr.withCredentials = true;
+      const token = getToken();
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.responseType = "json";
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) onProgress(Math.round((evt.loaded / evt.total) * 100));
+        };
+      }
+
+      xhr.onload = () => resolve(xhr);
+      xhr.onerror = () => reject(new ApiError(0, "Network error during upload", null));
+      xhr.onabort = () => reject(new ApiError(0, "Upload cancelled", null));
+
+      if (signal) {
+        signal.addEventListener("abort", () => xhr.abort(), { once: true });
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+      xhr.send(form);
+    });
+
+  return (async () => {
+    let xhr = await attempt();
+    if (xhr.status === 401) {
+      await refreshAccessToken().catch(() => {
+        onAuthLost();
+        throw new ApiError(401, "Your session has expired. Please sign in again.", null);
+      });
+      xhr = await attempt();
+    }
+    if (xhr.status < 200 || xhr.status >= 300) {
+      const body = xhr.response;
+      const detail = body?.detail ?? body;
+      const message = typeof detail === "string" ? detail : xhr.statusText || `Upload failed (${xhr.status})`;
+      throw new ApiError(xhr.status, message, detail);
+    }
+    return xhr.response;
+  })();
+}
+
 export function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

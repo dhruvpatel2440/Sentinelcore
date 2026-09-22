@@ -6,10 +6,14 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # build-essential is needed to compile argon2-cffi's bindings on slim images.
-# The rest are WeasyPrint's runtime libs (M9 PDF rendering) — Pango/Cairo do
-# the actual text shaping and layout; WeasyPrint has no pure-Python fallback.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+# libpango.../libcairo.../fonts are WeasyPrint's runtime libs (M9 PDF
+# rendering) — Pango/Cairo do the actual text shaping and layout; WeasyPrint
+# has no pure-Python fallback. tshark/capinfos are M11's offline PCAP parser
+# — pinned to no-setuid so the package install never prompts, since this
+# container never needs live-capture privileges, only to read files with -r.
+RUN echo "wireshark-common wireshark-common/install-setuid boolean false" | debconf-set-selections \
+    && DEBIAN_FRONTEND=noninteractive apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         build-essential \
         libpango-1.0-0 \
         libpangocairo-1.0-0 \
@@ -18,6 +22,7 @@ RUN apt-get update \
         libffi-dev \
         shared-mime-info \
         fonts-dejavu-core \
+        tshark \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

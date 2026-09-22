@@ -66,6 +66,15 @@ class Settings(BaseSettings):
     firewall_reconcile_interval_seconds: int = 300
     firewall_expiry_alert_after_attempts: int = 5
 
+    # M11 — PCAP analysis
+    pcap_storage_path: str = "/var/lib/sentinelcore/pcap"
+    max_pcap_size_mb: int = 500
+    pcap_parse_timeout_seconds: int = 300
+    max_flows_per_pcap: int = 50_000
+    pcap_retention_days: int = 30
+    pcap_queue_key: str = "pcap:queue"
+    pcap_upload_chunk_bytes: int = 1024 * 1024
+
     # Deployment
     environment: str = "development"
 

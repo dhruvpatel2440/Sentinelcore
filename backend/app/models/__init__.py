@@ -18,6 +18,7 @@ from app.models.incident import (
     IncidentStatus,
     TERMINAL_STATUSES,
 )
+from app.models.pcap import ArtifactType, PcapArtifact, PcapFile, PcapFlow, PcapStatus
 from app.models.report import Report, ReportFormat, ReportSchedule, ReportStatus, ReportType
 from app.models.saved_search import SavedSearch
 from app.models.scan import Scan, ScanStatus, ScanType
@@ -54,6 +55,11 @@ __all__ = [
     "IncidentHistory",
     "IncidentStatus",
     "TERMINAL_STATUSES",
+    "ArtifactType",
+    "PcapArtifact",
+    "PcapFile",
+    "PcapFlow",
+    "PcapStatus",
     "Report",
     "ReportFormat",
     "ReportSchedule",

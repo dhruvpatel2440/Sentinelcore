@@ -23,6 +23,8 @@ from app.pipeline.partitions import ensure_partitions
 from app.pipeline.retention import enforce_retention
 from app.pipeline.tailer import EveTailer
 from app.pipeline.writer import EventWriter
+from app.pcap.generator import enforce_pcap_retention
+from app.pcap.generator import run_forever as run_pcap_parser
 from app.reports.generator import enforce_report_retention
 from app.reports.generator import run_forever as run_report_generator
 from app.reports.scheduling import run_forever as run_report_scheduler
@@ -52,6 +54,9 @@ async def maintenance_loop(stop: asyncio.Event) -> None:
             expired_reports = await enforce_report_retention(SessionLocal)
             if expired_reports:
                 logger.info("report retention removed %d expired report(s)", expired_reports)
+            expired_pcaps = await enforce_pcap_retention(SessionLocal)
+            if expired_pcaps:
+                logger.info("pcap retention removed %d expired capture(s)", expired_pcaps)
         except Exception as exc:  # noqa: BLE001
             logger.error("maintenance pass failed: %s", exc)
 
@@ -101,6 +106,7 @@ async def main() -> int:
         asyncio.create_task(run_report_scheduler(SessionLocal, redis, stop), name="report_scheduler"),
         asyncio.create_task(run_firewall_expiry(SessionLocal, stop), name="firewall_expiry"),
         asyncio.create_task(run_firewall_reconcile(SessionLocal, redis, stop), name="firewall_reconcile"),
+        asyncio.create_task(run_pcap_parser(SessionLocal, redis, stop), name="pcap_parser"),
     ]
 
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
