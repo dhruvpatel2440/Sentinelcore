@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     report_generation_timeout_seconds: int = 600
     report_queue_key: str = "reports:queue"
 
+    # M10 — firewall containment
+    max_active_blocks: int = 100
+    firewall_expiry_interval_seconds: int = 15
+    firewall_reconcile_interval_seconds: int = 300
+    firewall_expiry_alert_after_attempts: int = 5
+
     # Deployment
     environment: str = "development"
 

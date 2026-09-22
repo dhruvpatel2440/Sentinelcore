@@ -4,6 +4,7 @@ import Layout from "./layout/Layout";
 import AssetsPage from "./pages/assets/AssetsPage";
 import CorrelationPage from "./pages/correlation/CorrelationPage";
 import EventsPage from "./pages/events/EventsPage";
+import FirewallPage from "./pages/firewall/FirewallPage";
 import IncidentDetail from "./pages/incidents/IncidentDetail";
 import IncidentsPage from "./pages/incidents/IncidentsPage";
 import LoginPage from "./pages/LoginPage";
@@ -89,12 +90,7 @@ export default function App() {
             path="firewall"
             element={
               <ProtectedRoute roles={["admin"]}>
-                <Placeholder
-                  title="Firewall"
-                  description="Containment actions against hostile hosts."
-                  milestone="M10"
-                  capabilities={["TTL-bounded block rules", "Protected-IP safeguards"]}
-                />
+                <FirewallPage />
               </ProtectedRoute>
             }
           />

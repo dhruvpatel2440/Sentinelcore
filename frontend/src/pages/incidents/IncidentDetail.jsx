@@ -1,4 +1,4 @@
-import { Check, ExternalLink, FileText, Plus, X } from "lucide-react";
+import { Check, ExternalLink, FileText, Plus, ShieldBan, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -12,6 +12,7 @@ import PageHeader from "../../components/PageHeader";
 import Table from "../../components/Table";
 import { useToast } from "../../components/Toast";
 import { absoluteTime, relativeTime } from "../../lib/format";
+import NewBlockModal from "../firewall/NewBlockModal";
 import NewReportModal from "../reports/NewReportModal";
 import { FORWARD_TRANSITIONS, STATUS_LABEL, STATUS_TONE, TERMINAL_STATUSES } from "./constants";
 
@@ -49,6 +50,7 @@ export default function IncidentDetail() {
   const [addEventsInput, setAddEventsInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [containModalOpen, setContainModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -219,6 +221,11 @@ export default function IncidentDetail() {
         description={`Opened ${relativeTime(incident.opened_at)} · MTTA ${incident.acknowledged_at ? relativeTime(incident.acknowledged_at) : "pending"}`}
         actions={
           <div className="flex items-center gap-2">
+            {isAdmin && incident.src_ip && (
+              <Button size="sm" variant="secondary" icon={ShieldBan} onClick={() => setContainModalOpen(true)}>
+                Contain
+              </Button>
+            )}
             <Button size="sm" variant="secondary" icon={FileText} onClick={() => setReportModalOpen(true)}>
               Generate report
             </Button>
@@ -429,6 +436,17 @@ export default function IncidentDetail() {
           reportType: "incident_detail",
           incidentId: incident.id,
           title: `Incident report — INC-${incident.number}`,
+        }}
+      />
+
+      <NewBlockModal
+        open={containModalOpen}
+        onClose={() => setContainModalOpen(false)}
+        onCreated={() => toast.success("Containment applied — see the Firewall page")}
+        prefill={{
+          target: incident.src_ip ? `${incident.src_ip}/32` : "",
+          reason: `Containment for INC-${incident.number}: ${incident.title}`,
+          incidentId: incident.id,
         }}
       />
     </>

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from helper.ops.firewall import fw_apply, fw_check_target, fw_list, fw_reconcile, fw_revoke
 from helper.ops.nmap_scan import arp_sweep, nmap_scan
 from helper.ops.suricata import (
     suricata_reload_rules,
@@ -33,6 +34,12 @@ OPS: dict[str, Handler] = {
     "suricata_reload_rules": suricata_reload_rules,
     "suricata_test_config": suricata_test_config,
     "suricata_write_rules": suricata_write_rules,
+    # M10 — firewall containment
+    "fw_apply": fw_apply,
+    "fw_revoke": fw_revoke,
+    "fw_list": fw_list,
+    "fw_reconcile": fw_reconcile,
+    "fw_check_target": fw_check_target,
 }
 
 

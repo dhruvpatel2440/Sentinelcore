@@ -26,6 +26,8 @@ from app.pipeline.writer import EventWriter
 from app.reports.generator import enforce_report_retention
 from app.reports.generator import run_forever as run_report_generator
 from app.reports.scheduling import run_forever as run_report_scheduler
+from app.services.firewall import run_expiry_loop as run_firewall_expiry
+from app.services.firewall import run_reconcile_loop as run_firewall_reconcile
 from app.services.promotion import run_forever as run_promotion_subscriber
 
 logging.basicConfig(
@@ -97,6 +99,8 @@ async def main() -> int:
         asyncio.create_task(run_promotion_subscriber(SessionLocal, redis, stop), name="promotion"),
         asyncio.create_task(run_report_generator(SessionLocal, redis, stop), name="report_generator"),
         asyncio.create_task(run_report_scheduler(SessionLocal, redis, stop), name="report_scheduler"),
+        asyncio.create_task(run_firewall_expiry(SessionLocal, stop), name="firewall_expiry"),
+        asyncio.create_task(run_firewall_reconcile(SessionLocal, redis, stop), name="firewall_reconcile"),
     ]
 
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

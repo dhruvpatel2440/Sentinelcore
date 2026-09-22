@@ -134,6 +134,7 @@ services:
       # Only the API runs migrations; two concurrent `alembic upgrade head`
       # processes race on the same schema.
       RUN_MIGRATIONS: "false"
+      HELPER_SOCKET_PATH: /run/sentinelcore/helper.sock
     command: ["python", "-m", "app.pipeline.worker"]
     volumes:
       - ./backend:/app
@@ -141,6 +142,9 @@ services:
       # able to alter or truncate it.
       - suricata_logs:/var/log/suricata:ro
       - report_storage:/var/lib/sentinelcore/reports
+      # M10 — the expiry and reconciliation loops call the privileged helper
+      # to revoke/re-apply firewall rules, same socket the API uses.
+      - helper_socket:/run/sentinelcore
     cap_drop:
       - ALL
     security_opt:

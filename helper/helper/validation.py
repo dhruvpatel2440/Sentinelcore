@@ -228,6 +228,56 @@ def validate_rules_filename(raw: object) -> str:
     return name
 
 
+# --------------------------------------------------------------------------
+# Firewall (M10)
+# --------------------------------------------------------------------------
+
+_ACTION_ID_RE = re.compile(r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
+
+DIRECTIONS = ("inbound", "outbound", "both")
+PROTOCOLS = ("tcp", "udp")
+
+
+def validate_action_id(raw: object) -> str:
+    """Canonical lowercase UUID — this string becomes the iptables comment
+    tag, so it must be constrained tightly enough to search for reliably."""
+    if not isinstance(raw, str):
+        raise ValidationError("invalid_action_id", "action_id must be a string")
+    value = raw.strip().lower()
+    if not _ACTION_ID_RE.match(value):
+        raise ValidationError("invalid_action_id", "action_id must be a UUID")
+    return value
+
+
+def validate_direction(raw: object) -> str:
+    if not isinstance(raw, str) or raw not in DIRECTIONS:
+        raise ValidationError(
+            "invalid_direction", f"direction must be one of {', '.join(DIRECTIONS)}"
+        )
+    return raw
+
+
+def validate_protocol_port(protocol_raw: object, port_raw: object) -> tuple[str | None, int | None]:
+    protocol: str | None = None
+    if protocol_raw is not None:
+        if not isinstance(protocol_raw, str) or protocol_raw not in PROTOCOLS:
+            raise ValidationError("invalid_protocol", f"protocol must be one of {', '.join(PROTOCOLS)}")
+        protocol = protocol_raw
+
+    port: int | None = None
+    if port_raw is not None:
+        if isinstance(port_raw, bool) or not isinstance(port_raw, int):
+            raise ValidationError("invalid_port", "port must be an integer")
+        if not (1 <= port_raw <= 65535):
+            raise ValidationError("invalid_port", "port must be between 1 and 65535")
+        port = port_raw
+
+    if port is not None and protocol is None:
+        raise ValidationError("invalid_protocol", "a port requires a protocol (tcp or udp)")
+
+    return protocol, port
+
+
 _SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 
 

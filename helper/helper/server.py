@@ -17,9 +17,11 @@ import sys
 import threading
 import uuid
 
+from helper import guards
 from helper.config import config
 from helper.executor import ExecutionError
 from helper.ops import OPS
+from helper.ops.firewall import ensure_chain
 from helper.protocol import ProtocolError, error_response, ok_response, parse_request
 from helper.validation import ValidationError
 
@@ -216,6 +218,14 @@ def serve() -> int:
 
     _prepare_shared_dirs()
     _prepare_socket_path()
+
+    guards.start_refresh_thread()
+    try:
+        ensure_chain()
+    except ExecutionError as exc:
+        # Non-fatal: iptables may be briefly unavailable at container start.
+        # fw_apply/_reconcile re-attempt chain setup on every call.
+        logger.warning("could not set up SENTINELCORE chain at startup: %s", exc.message)
 
     server = ThreadedUnixServer(str(config.socket_path), RequestHandler)
     _secure_socket_path()
