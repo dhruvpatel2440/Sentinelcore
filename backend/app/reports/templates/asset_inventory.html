@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Summary</h2>
+<div class="stat-grid">
+  <div class="stat"><div class="label">Total assets</div><div class="value">{{ data.total_assets }}</div></div>
+  <div class="stat"><div class="label">Stale (30d+)</div><div class="value">{{ data.stale_count }}</div></div>
+  <div class="stat"><div class="label">High-risk open ports</div><div class="value">{{ data.high_risk_count }}</div></div>
+</div>
+
+<h2>Posture</h2>
+<img class="chart" src="{{ posture_chart }}" alt="Asset posture">
+
+<h2>Inventory</h2>
+<table>
+  <tr>
+    <th>IP</th><th>Hostname</th><th>MAC / Vendor</th><th>OS guess</th><th>Open ports</th>
+    <th>Last seen</th><th>Incidents</th><th>Flags</th>
+  </tr>
+  {% for a in data.table %}
+  <tr>
+    <td>{{ a.ip_address }}</td>
+    <td>{{ a.hostname or "—" }}</td>
+    <td>{{ a.mac_address or "—" }}{% if a.vendor %} ({{ a.vendor }}){% endif %}</td>
+    <td>{{ a.os_guess or "—" }}</td>
+    <td>{% for p in a.ports %}{% if p.state == "open" %}{{ p.port }}/{{ p.protocol }}{% if p.service %} ({{ p.service }}){% endif %}<br>{% endif %}{% endfor %}</td>
+    <td>{{ a.last_seen }}</td>
+    <td>{{ a.incident_count }}</td>
+    <td>
+      {% if a.is_stale %}<span class="warn">stale</span>{% endif %}
+      {% if a.high_risk_ports %}<span class="warn">high-risk: {{ a.high_risk_ports|join(", ") }}</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

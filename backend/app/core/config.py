@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     auto_promote_score: int = 70  # roughly the "high"/"critical" band
     incident_merge_window_minutes: int = 60
 
+    # M9 — reporting
+    report_storage_path: str = "/var/lib/sentinelcore/reports"
+    max_report_window_days: int = 365
+    max_concurrent_reports_per_user: int = 3
+    report_retention_days: int = 30
+    report_generation_timeout_seconds: int = 600
+    report_queue_key: str = "reports:queue"
+
     # Deployment
     environment: str = "development"
 

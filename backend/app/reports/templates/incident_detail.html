@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+{% set i = data.incident %}
+<h2>INC-{{ i.number }} — {{ i.title }}</h2>
+<div class="stat-grid">
+  <div class="stat"><div class="label">Severity</div><div class="value">{{ i.severity }}</div></div>
+  <div class="stat"><div class="label">Status</div><div class="value">{{ i.status }}</div></div>
+  <div class="stat"><div class="label">Score</div><div class="value">{{ i.score }}</div></div>
+</div>
+
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Source IP</td><td>{{ i.src_ip or "—" }}</td></tr>
+  <tr><td>Destination IP</td><td>{{ i.dst_ip or "—" }}</td></tr>
+  <tr><td>Rule</td><td>{{ i.rule_name or "manual" }}</td></tr>
+  <tr><td>Opened</td><td>{{ i.opened_at }}</td></tr>
+  <tr><td>Acknowledged</td><td>{{ i.acknowledged_at or "—" }}</td></tr>
+  <tr><td>Closed</td><td>{{ i.closed_at or "—" }} {% if i.closed_by %}by {{ i.closed_by }}{% endif %}</td></tr>
+  <tr><td>Assignee</td><td>{{ i.assignee or "unassigned" }}</td></tr>
+</table>
+
+<h2>Description</h2>
+<p>{{ i.description or "—" }}</p>
+
+{% if data.asset %}
+<h2>Affected asset</h2>
+<table>
+  <tr><th>IP</th><th>Hostname</th><th>OS guess</th><th>Vendor</th></tr>
+  <tr><td>{{ data.asset.ip_address }}</td><td>{{ data.asset.hostname or "—" }}</td><td>{{ data.asset.os_guess or "—" }}</td><td>{{ data.asset.vendor or "—" }}</td></tr>
+</table>
+{% endif %}
+
+<h2>Resolution</h2>
+<p>{{ i.resolution_note or "Not yet resolved." }}</p>
+
+<h2>Linked events by severity</h2>
+<img class="chart" src="{{ severity_chart }}" alt="Linked events by severity">
+{% if data.events_truncated %}
+<p class="warn">Showing the first {{ data.events|length }} of {{ data.events_total }} linked events.</p>
+{% endif %}
+
+<h2>Timeline</h2>
+<table>
+  <tr><th>When</th><th>Who</th><th>Action</th><th>Detail</th></tr>
+  {% for h in data.history %}
+  <tr>
+    <td>{{ h.created_at }}</td><td>{{ h.user or "system" }}</td><td>{{ h.action }}</td>
+    <td>{% if h.note %}{{ h.note }}{% elif h.from_value %}{{ h.from_value }} &rarr; {{ h.to_value }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Linked events ({{ data.events_total }})</h2>
+<table>
+  <tr><th>Time</th><th>Severity</th><th>Signature</th><th>Src</th><th>Dst</th></tr>
+  {% for e in data.events %}
+  <tr><td>{{ e.ts }}</td><td>{{ e.severity }}</td><td>{{ e.signature or "—" }}</td><td>{{ e.src_ip or "—" }}</td><td>{{ e.dst_ip or "—" }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

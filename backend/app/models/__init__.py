@@ -10,6 +10,7 @@ from app.models.incident import (
     IncidentStatus,
     TERMINAL_STATUSES,
 )
+from app.models.report import Report, ReportFormat, ReportSchedule, ReportStatus, ReportType
 from app.models.saved_search import SavedSearch
 from app.models.scan import Scan, ScanStatus, ScanType
 from app.models.sensor import (
@@ -39,6 +40,11 @@ __all__ = [
     "IncidentHistory",
     "IncidentStatus",
     "TERMINAL_STATUSES",
+    "Report",
+    "ReportFormat",
+    "ReportSchedule",
+    "ReportStatus",
+    "ReportType",
     "PortState",
     "Protocol",
     "OverrideAction",

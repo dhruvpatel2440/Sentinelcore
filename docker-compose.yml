@@ -12,6 +12,8 @@ volumes:
   suricata_rules:
   suricata_logs:
   suricata_run:
+  # Generated report files (M9) — a volume, never the image, per the spec.
+  report_storage:
 
 services:
   db:
@@ -101,6 +103,7 @@ services:
       - helper_socket:/run/sentinelcore
       - rule_staging:/var/lib/sentinelcore/staging
       - suricata_logs:/var/log/suricata:ro
+      - report_storage:/var/lib/sentinelcore/reports
     # CLAUDE.md: the API runs unprivileged. It gets NO network capabilities —
     # nmap/ARP work is delegated to `helper` over the socket above.
     cap_drop:
@@ -137,6 +140,7 @@ services:
       # READ-ONLY: the pipeline reads the sensor's output and must never be
       # able to alter or truncate it.
       - suricata_logs:/var/log/suricata:ro
+      - report_storage:/var/lib/sentinelcore/reports
     cap_drop:
       - ALL
     security_opt:

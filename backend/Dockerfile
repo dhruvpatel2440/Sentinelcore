@@ -6,8 +6,18 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # build-essential is needed to compile argon2-cffi's bindings on slim images.
+# The rest are WeasyPrint's runtime libs (M9 PDF rendering) — Pango/Cairo do
+# the actual text shaping and layout; WeasyPrint has no pure-Python fallback.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libcairo2 \
+        libffi-dev \
+        shared-mime-info \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

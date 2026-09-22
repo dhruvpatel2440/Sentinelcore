@@ -23,6 +23,9 @@ from app.pipeline.partitions import ensure_partitions
 from app.pipeline.retention import enforce_retention
 from app.pipeline.tailer import EveTailer
 from app.pipeline.writer import EventWriter
+from app.reports.generator import enforce_report_retention
+from app.reports.generator import run_forever as run_report_generator
+from app.reports.scheduling import run_forever as run_report_scheduler
 from app.services.promotion import run_forever as run_promotion_subscriber
 
 logging.basicConfig(
@@ -44,6 +47,9 @@ async def maintenance_loop(stop: asyncio.Event) -> None:
                 result = await enforce_retention(db)
                 if result["dropped"]:
                     logger.info("retention dropped: %s", result["dropped"])
+            expired_reports = await enforce_report_retention(SessionLocal)
+            if expired_reports:
+                logger.info("report retention removed %d expired report(s)", expired_reports)
         except Exception as exc:  # noqa: BLE001
             logger.error("maintenance pass failed: %s", exc)
 
@@ -89,6 +95,8 @@ async def main() -> int:
         asyncio.create_task(maintenance_loop(stop), name="maintenance"),
         asyncio.create_task(run_correlation_engine(SessionLocal, redis, stop), name="correlation"),
         asyncio.create_task(run_promotion_subscriber(SessionLocal, redis, stop), name="promotion"),
+        asyncio.create_task(run_report_generator(SessionLocal, redis, stop), name="report_generator"),
+        asyncio.create_task(run_report_scheduler(SessionLocal, redis, stop), name="report_scheduler"),
     ]
 
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

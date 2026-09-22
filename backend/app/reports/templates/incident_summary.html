@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Summary</h2>
+<div class="stat-grid">
+  <div class="stat"><div class="label">Total incidents</div><div class="value">{{ data.total_incidents }}</div></div>
+  <div class="stat"><div class="label">Mean time to acknowledge</div><div class="value">{{ mtta_display }}</div></div>
+  <div class="stat"><div class="label">Mean time to resolve</div><div class="value">{{ mttr_display }}</div></div>
+</div>
+
+<h2>By severity</h2>
+<img class="chart" src="{{ severity_chart }}" alt="Incidents by severity">
+
+<h2>Opened vs. closed over time</h2>
+<img class="chart" src="{{ timeline_chart }}" alt="Opened vs closed over time">
+
+<h2>Top correlation rules</h2>
+<table>
+  <tr><th>Rule</th><th>Incidents</th></tr>
+  {% for r in data.top_rules %}
+  <tr><td>{{ r.name }}</td><td>{{ r.count }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Top affected assets</h2>
+<table>
+  <tr><th>Asset</th><th>Incidents</th></tr>
+  {% for a in data.top_assets %}
+  <tr><td>{{ a.name }}</td><td>{{ a.count }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Top source IPs</h2>
+<table>
+  <tr><th>Source IP</th><th>Incidents</th></tr>
+  {% for s in data.top_src_ips %}
+  <tr><td>{{ s.ip }}</td><td>{{ s.count }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Incidents in window ({{ data.table|length }})</h2>
+<table>
+  <tr><th>Number</th><th>Title</th><th>Severity</th><th>Status</th><th>Opened</th><th>Closed</th><th>Assignee</th></tr>
+  {% for i in data.table %}
+  <tr>
+    <td>INC-{{ i.number }}</td><td>{{ i.title }}</td><td>{{ i.severity }}</td><td>{{ i.status }}</td>
+    <td>{{ i.opened_at }}</td><td>{{ i.closed_at or "—" }}</td><td>{{ i.assignee or "—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}
