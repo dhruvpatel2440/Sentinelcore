@@ -10,6 +10,7 @@ import LoginPage from "./pages/LoginPage";
 import SensorPage from "./pages/sensor/SensorPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import Placeholder from "./pages/Placeholder";
+import ReportsPage from "./pages/reports/ReportsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 /**
@@ -72,17 +73,7 @@ export default function App() {
             }
           />
 
-          <Route
-            path="reports"
-            element={
-              <Placeholder
-                title="Reports"
-                description="Scheduled and ad-hoc reporting."
-                milestone="M9"
-                capabilities={["Incident and detection summaries", "Export to PDF/CSV"]}
-              />
-            }
-          />
+          <Route path="reports" element={<ReportsPage />} />
 
           {/* Admin-only — mirrored in navigation.js */}
           <Route

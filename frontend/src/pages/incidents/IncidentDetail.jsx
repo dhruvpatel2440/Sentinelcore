@@ -1,4 +1,4 @@
-import { Check, ExternalLink, Plus, X } from "lucide-react";
+import { Check, ExternalLink, FileText, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -12,6 +12,7 @@ import PageHeader from "../../components/PageHeader";
 import Table from "../../components/Table";
 import { useToast } from "../../components/Toast";
 import { absoluteTime, relativeTime } from "../../lib/format";
+import NewReportModal from "../reports/NewReportModal";
 import { FORWARD_TRANSITIONS, STATUS_LABEL, STATUS_TONE, TERMINAL_STATUSES } from "./constants";
 
 const RESOLUTION_TEMPLATE = "Root cause: \nActions taken: \nVerified: ";
@@ -47,6 +48,7 @@ export default function IncidentDetail() {
   const [addEventsOpen, setAddEventsOpen] = useState(false);
   const [addEventsInput, setAddEventsInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -217,6 +219,9 @@ export default function IncidentDetail() {
         description={`Opened ${relativeTime(incident.opened_at)} · MTTA ${incident.acknowledged_at ? relativeTime(incident.acknowledged_at) : "pending"}`}
         actions={
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" icon={FileText} onClick={() => setReportModalOpen(true)}>
+              Generate report
+            </Button>
             <Badge severity={incident.severity} />
             <Badge tone={STATUS_TONE[incident.status]}>{STATUS_LABEL[incident.status]}</Badge>
           </div>
@@ -415,6 +420,17 @@ export default function IncidentDetail() {
           Open M6 search in this incident's window <ExternalLink size={11} />
         </Link>
       </Modal>
+
+      <NewReportModal
+        open={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        onCreated={() => toast.success("Report queued — check the Reports page")}
+        prefill={{
+          reportType: "incident_detail",
+          incidentId: incident.id,
+          title: `Incident report — INC-${incident.number}`,
+        }}
+      />
     </>
   );
 }

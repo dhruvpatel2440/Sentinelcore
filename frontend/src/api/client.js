@@ -125,6 +125,49 @@ async function request(path, options = {}) {
   return contentType.includes("application/json") ? res.json() : res.text();
 }
 
+/**
+ * Streams an authenticated file download (reports, pcap, …) as a blob rather
+ * than JSON. Shares the token/refresh logic with `request()` because a
+ * download hitting a stale access token should retry exactly like any other
+ * call, not surface a raw 401 to the user.
+ */
+export async function downloadFile(path) {
+  const attempt = () => {
+    const token = getToken();
+    return fetch(`${BASE}${path}`, {
+      credentials: "include",
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+  };
+
+  let res = await attempt();
+  if (res.status === 401) {
+    try {
+      await refreshAccessToken();
+      res = await attempt();
+    } catch {
+      onAuthLost();
+      throw new ApiError(401, "Your session has expired. Please sign in again.", null);
+    }
+  }
+  if (!res.ok) throw await parseError(res);
+
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  return { blob: await res.blob(), filename: match?.[1] || "download" };
+}
+
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: (path, options) => request(path, { ...options, method: "GET" }),
   post: (path, body, options) => request(path, { ...options, method: "POST", body }),
