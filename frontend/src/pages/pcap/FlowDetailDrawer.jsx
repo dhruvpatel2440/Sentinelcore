@@ -10,6 +10,15 @@ import { absoluteTime, formatBytes } from "../../lib/format";
 
 const PACKET_LIMIT = 100;
 
+function toHex(text) {
+  let out = "";
+  for (let i = 0; i < text.length; i += 1) {
+    out += text.charCodeAt(i).toString(16).padStart(2, "0");
+    out += i % 16 === 15 ? "\n" : " ";
+  }
+  return out;
+}
+
 /**
  * Flow detail: packets tab (paginated) and follow-stream tab. The follow
  * content is attacker-controlled capture data — it is rendered as a plain
@@ -26,6 +35,7 @@ export default function FlowDetailDrawer({ pcapId, flow, open, onClose }) {
   const [follow, setFollow] = useState(null);
   const [followLoading, setFollowLoading] = useState(false);
   const [followError, setFollowError] = useState(null);
+  const [viewMode, setViewMode] = useState("ascii"); // "ascii" | "hex"
 
   useEffect(() => {
     if (!open || !flow) return;
@@ -34,6 +44,7 @@ export default function FlowDetailDrawer({ pcapId, flow, open, onClose }) {
     setPacketOffset(0);
     setFollow(null);
     setFollowError(null);
+    setViewMode("ascii");
   }, [open, flow]);
 
   const loadPackets = async (offset) => {
@@ -128,14 +139,24 @@ export default function FlowDetailDrawer({ pcapId, flow, open, onClose }) {
           {followError && <p className="text-xs text-rose-400">{followError}</p>}
           {follow && (
             <>
-              {follow.truncated && (
-                <div className="mb-2 flex items-center gap-2">
-                  <Badge tone="warning">Truncated</Badge>
-                  <span className="text-xs text-slate-500">Only part of this stream is shown.</span>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex gap-1">
+                  <Button size="sm" variant={viewMode === "ascii" ? "primary" : "secondary"} onClick={() => setViewMode("ascii")}>
+                    ASCII
+                  </Button>
+                  <Button size="sm" variant={viewMode === "hex" ? "primary" : "secondary"} onClick={() => setViewMode("hex")}>
+                    Hex
+                  </Button>
                 </div>
-              )}
+                {follow.truncated && (
+                  <div className="flex items-center gap-2">
+                    <Badge tone="warning">Truncated</Badge>
+                    <span className="text-xs text-slate-500">Only part of this stream is shown.</span>
+                  </div>
+                )}
+              </div>
               <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-md border border-slate-700 bg-slate-900 p-3 font-mono text-xs text-slate-300">
-                {follow.content}
+                {viewMode === "ascii" ? follow.content : toHex(follow.content)}
               </pre>
             </>
           )}

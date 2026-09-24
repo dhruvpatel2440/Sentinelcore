@@ -10,7 +10,12 @@ import IncidentsPage from "./pages/incidents/IncidentsPage";
 import LoginPage from "./pages/LoginPage";
 import SensorPage from "./pages/sensor/SensorPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import Placeholder from "./pages/Placeholder";
+import PcapDetail from "./pages/pcap/PcapDetail";
+import PcapPage from "./pages/pcap/PcapPage";
+import IntelPage from "./pages/intel/IntelPage";
+import IocDetail from "./pages/intel/IocDetail";
+import OverviewPage from "./pages/overview/OverviewPage";
+import UsersPage from "./pages/admin/UsersPage";
 import ReportsPage from "./pages/reports/ReportsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -26,20 +31,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
-          <Route
-            index
-            element={
-              <Placeholder
-                title="Overview"
-                description="Platform-wide detection and response posture."
-                milestone="M2+"
-                capabilities={[
-                  "Live event volume and severity breakdown",
-                  "Open incidents and sensor health at a glance",
-                ]}
-              />
-            }
-          />
+          <Route index element={<OverviewPage />} />
 
           <Route path="assets" element={<AssetsPage />} />
 
@@ -50,29 +42,11 @@ export default function App() {
           <Route path="incidents" element={<IncidentsPage />} />
           <Route path="incidents/:number" element={<IncidentDetail />} />
 
-          <Route
-            path="intel"
-            element={
-              <Placeholder
-                title="Threat Intel"
-                description="Indicators of compromise and enrichment feeds."
-                milestone="M12"
-                capabilities={["IOC matching against live events", "Feed management"]}
-              />
-            }
-          />
+          <Route path="intel" element={<IntelPage />} />
+          <Route path="intel/:id" element={<IocDetail />} />
 
-          <Route
-            path="pcap"
-            element={
-              <Placeholder
-                title="PCAP"
-                description="Packet capture retrieval and analysis."
-                milestone="M11"
-                capabilities={["Flow-scoped capture extraction", "Stream reassembly"]}
-              />
-            }
-          />
+          <Route path="pcap" element={<PcapPage />} />
+          <Route path="pcap/:id" element={<PcapDetail />} />
 
           <Route path="reports" element={<ReportsPage />} />
 
@@ -99,12 +73,7 @@ export default function App() {
             path="admin/users"
             element={
               <ProtectedRoute roles={["admin"]}>
-                <Placeholder
-                  title="Users"
-                  description="Accounts, roles and access review."
-                  milestone="M1"
-                  capabilities={["Create and deactivate accounts", "Role assignment"]}
-                />
+                <UsersPage />
               </ProtectedRoute>
             }
           />

@@ -44,6 +44,8 @@ class EventOut(BaseModel):
     src_asset_id: uuid.UUID | None
     dst_asset_id: uuid.UUID | None
     flow_id: int | None
+    ioc_match: bool = False
+    ioc_severity: Severity | None = None
 
     @field_validator("src_ip", "dst_ip", mode="before")
     @classmethod

@@ -267,7 +267,11 @@ async def get_event_facets(
         from_, to, severity, event_type, src_ip, dst_ip, ip, port, proto, signature_id, q, asset_id
     )
 
-    cache_key = "events:facets:" + hashlib.sha256(filters.cache_key().encode()).hexdigest()
+    # Bucket the window to the cache TTL, or a now()-derived default window
+    # makes every key unique and the cache never hits.
+    cache_key = "events:facets:" + hashlib.sha256(
+        filters.cache_key(bucket_seconds=settings.search_facet_cache_seconds).encode()
+    ).hexdigest()
     redis = get_redis()
     cached = await redis.get(cache_key)
     if cached:
@@ -371,10 +375,17 @@ async def list_events(
 @router.get("/{event_id}", response_model=EventDetailOut)
 async def get_event(
     event_id: int,
+    ts: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> EventDetailOut:
-    event = await db.scalar(select(Event).where(Event.id == event_id))
+    # `events` is range-partitioned by ts; an id-only lookup must probe every
+    # partition. Callers that already have the row (the common case — opening
+    # detail from a list) pass `ts` so this prunes to a single partition.
+    stmt = select(Event).where(Event.id == event_id)
+    if ts is not None:
+        stmt = stmt.where(Event.ts == ts)
+    event = await db.scalar(stmt)
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
 

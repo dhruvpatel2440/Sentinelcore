@@ -111,6 +111,18 @@ async def parse_pcap(pcap_id: uuid.UUID, sessionmaker: async_sessionmaker[AsyncS
             pcap_id, len(flow_rows), truncated, len(artifact_rows),
         )
 
+        # M12: retrospective matching against current intel — "were we
+        # already talking to it" for a capture, not just live traffic.
+        try:
+            from app.intel.matcher import match_pcap_artifacts
+
+            async with sessionmaker() as db:
+                matched = await match_pcap_artifacts(db, redis, pcap_id)
+                if matched:
+                    logger.info("pcap %s: %d artifact(s) matched current intel", pcap_id, matched)
+        except Exception:  # noqa: BLE001 — IOC matching must never fail a parse that already succeeded
+            logger.exception("pcap %s: ioc matching pass failed", pcap_id)
+
     except Exception as exc:  # noqa: BLE001 — must always resolve the row
         logger.error("pcap %s parse failed: %s", pcap_id, exc)
         async with sessionmaker() as db:

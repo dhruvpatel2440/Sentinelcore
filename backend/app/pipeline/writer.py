@@ -22,8 +22,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.intel.matcher import match_event_row, publish_hits
 from app.models.asset import Asset
 from app.models.event import Event
+from app.models.ioc import IocMatch
 from app.pipeline.normalize import NormalizeError, normalize
 from app.pipeline.tailer import METRICS_KEY, STREAM_KEY
 
@@ -146,12 +148,42 @@ class EventWriter:
             seen.add(row["dedup_key"])
             unique_rows.append(row)
 
+        # M12: IOC matching hooks into this existing enrichment pass rather
+        # than a second pipeline. Mutates ioc_match/ioc_severity/severity in
+        # place; hits are kept keyed by dedup_key so they can be tied to the
+        # real event id once the insert returns it below.
+        hits_by_dedup_key: dict[bytes, list] = {}
+        for row in unique_rows:
+            hits = await match_event_row(self.redis, row)
+            if hits:
+                hits_by_dedup_key[row["dedup_key"]] = hits
+
         stmt = pg_insert(Event).values(unique_rows)
         stmt = stmt.on_conflict_do_nothing(index_elements=["dedup_key", "ts"])
-        result = await db.execute(stmt)
+        stmt = stmt.returning(Event.id, Event.dedup_key)
+        inserted_rows = (await db.execute(stmt)).all()
+
+        if hits_by_dedup_key:
+            for event_id, dedup_key in inserted_rows:
+                hits = hits_by_dedup_key.get(bytes(dedup_key))
+                if not hits:
+                    continue
+                for hit in hits:
+                    db.add(
+                        IocMatch(
+                            ioc_id=hit.ioc_id, event_id=event_id,
+                            matched_value=hit.matched_value, matched_field=hit.matched_field,
+                        )
+                    )
+
         await db.commit()
 
-        inserted = result.rowcount if result.rowcount is not None else len(unique_rows)
+        for event_id, dedup_key in inserted_rows:
+            hits = hits_by_dedup_key.get(bytes(dedup_key))
+            if hits:
+                await publish_hits(self.redis, event_id, hits)
+
+        inserted = len(inserted_rows)
         self.events_written += inserted
         self.duplicates_skipped += len(unique_rows) - inserted
         self.batches += 1

@@ -22,7 +22,7 @@ function Field({ label, children }) {
  * (e.g. `{ ip: "10.0.0.5" }`) so the parent page can carry it into a new
  * search without this component knowing about URL state.
  */
-export default function EventDetail({ eventId, open, onClose, onPivot }) {
+export default function EventDetail({ eventId, eventTs, open, onClose, onPivot }) {
   const toast = useToast();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,15 +33,18 @@ export default function EventDetail({ eventId, open, onClose, onPivot }) {
     let cancelled = false;
     setLoading(true);
     setRawOpen(false);
+    // `ts` lets the backend prune to a single partition instead of scanning
+    // every monthly partition for an id-only lookup.
+    const query = eventTs ? `?ts=${encodeURIComponent(eventTs)}` : "";
     api
-      .get(`/events/${eventId}`)
+      .get(`/events/${eventId}${query}`)
       .then((data) => !cancelled && setEvent(data))
       .catch((err) => !cancelled && toast.error(err.message || "Could not load event"))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [eventId, open, toast]);
+  }, [eventId, eventTs, open, toast]);
 
   const copyRaw = async () => {
     try {

@@ -15,6 +15,7 @@ from app.api.routes import (
     firewall,
     health,
     incidents,
+    intel,
     pcap,
     pipeline,
     reports,
@@ -36,3 +37,4 @@ api_router.include_router(incidents.router)
 api_router.include_router(reports.router)
 api_router.include_router(firewall.router)
 api_router.include_router(pcap.router)
+api_router.include_router(intel.router)

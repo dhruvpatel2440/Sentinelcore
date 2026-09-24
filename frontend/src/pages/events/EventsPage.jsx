@@ -1,6 +1,6 @@
-import { Activity, PauseCircle, PlayCircle, RefreshCw } from "lucide-react";
+import { Activity, PauseCircle, PlayCircle, RefreshCw, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api/client";
 import Badge from "../../components/Badge";
@@ -32,6 +32,21 @@ export default function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = filtersFromSearchParams(searchParams);
 
+  // When the URL has no from/to, filtersFromSearchParams() falls back to
+  // defaultFilters(), which stamps `new Date()` on every call. Reading that
+  // fresh value directly into `filters` below means the object's identity —
+  // and its from/to strings — change on every single render, which retriggers
+  // every effect keyed on JSON.stringify(filters) and re-renders forever. Push
+  // the resolved default range into the URL once so `searchParams` becomes the
+  // single stable source of truth; the effect below only ever fires when the
+  // user actually changes something.
+  useEffect(() => {
+    if (!searchParams.get("from") || !searchParams.get("to")) {
+      setSearchParams(filtersToSearchParams(filters), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -40,6 +55,7 @@ export default function EventsPage() {
   const [activeRange, setActiveRange] = useState("24h");
 
   const [selectedEventId, setSelectedEventId] = useState(null);
+  const [selectedEventTs, setSelectedEventTs] = useState(null);
   const [liveTail, setLiveTail] = useState(false);
   const [newCount, setNewCount] = useState(0);
   const [scrolledDown, setScrolledDown] = useState(false);
@@ -168,7 +184,21 @@ export default function EventsPage() {
       key: "signature",
       header: "Signature",
       className: "max-w-xs truncate",
-      render: (r) => r.signature || <span className="text-slate-600">—</span>,
+      render: (r) => (
+        <span className="flex items-center gap-1.5">
+          {r.signature || <span className="text-slate-600">—</span>}
+          {r.ioc_match && (
+            <Link
+              to={`/intel?q=${encodeURIComponent(r.src_ip || r.dst_ip || "")}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Matched a known-bad indicator"
+              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300 ring-1 ring-inset ring-rose-500/30 hover:bg-rose-500/25"
+            >
+              <ShieldAlert size={10} /> IOC
+            </Link>
+          )}
+        </span>
+      ),
     },
     {
       key: "flow",
@@ -233,7 +263,10 @@ export default function EventsPage() {
             rows={events}
             loading={loading}
             rowKey={(r) => r.id}
-            onRowClick={(row) => setSelectedEventId(row.id)}
+            onRowClick={(row) => {
+              setSelectedEventId(row.id);
+              setSelectedEventTs(row.ts);
+            }}
             empty={
               <EmptyState
                 icon={Activity}
@@ -257,6 +290,7 @@ export default function EventsPage() {
 
       <EventDetail
         eventId={selectedEventId}
+        eventTs={selectedEventTs}
         open={selectedEventId != null}
         onClose={() => setSelectedEventId(null)}
         onPivot={pivotTo}

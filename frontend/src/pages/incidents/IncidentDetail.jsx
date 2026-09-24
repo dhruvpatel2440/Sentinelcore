@@ -1,4 +1,4 @@
-import { Check, ExternalLink, FileText, Plus, ShieldBan, X } from "lucide-react";
+import { Check, ExternalLink, FileSearch, FileText, Plus, ShieldBan, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -13,6 +13,7 @@ import Table from "../../components/Table";
 import { useToast } from "../../components/Toast";
 import { absoluteTime, relativeTime } from "../../lib/format";
 import NewBlockModal from "../firewall/NewBlockModal";
+import PcapUploadModal from "../pcap/PcapUploadModal";
 import NewReportModal from "../reports/NewReportModal";
 import { FORWARD_TRANSITIONS, STATUS_LABEL, STATUS_TONE, TERMINAL_STATUSES } from "./constants";
 
@@ -51,6 +52,7 @@ export default function IncidentDetail() {
   const [busy, setBusy] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [containModalOpen, setContainModalOpen] = useState(false);
+  const [pcapModalOpen, setPcapModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,6 +231,11 @@ export default function IncidentDetail() {
             <Button size="sm" variant="secondary" icon={FileText} onClick={() => setReportModalOpen(true)}>
               Generate report
             </Button>
+            {canEdit && (
+              <Button size="sm" variant="secondary" icon={FileSearch} onClick={() => setPcapModalOpen(true)}>
+                Upload PCAP
+              </Button>
+            )}
             <Badge severity={incident.severity} />
             <Badge tone={STATUS_TONE[incident.status]}>{STATUS_LABEL[incident.status]}</Badge>
           </div>
@@ -448,6 +455,13 @@ export default function IncidentDetail() {
           reason: `Containment for INC-${incident.number}: ${incident.title}`,
           incidentId: incident.id,
         }}
+      />
+
+      <PcapUploadModal
+        open={pcapModalOpen}
+        onClose={() => setPcapModalOpen(false)}
+        incidentId={incident.id}
+        onUploaded={() => toast.success("Capture uploaded — attached to this incident")}
       />
     </>
   );

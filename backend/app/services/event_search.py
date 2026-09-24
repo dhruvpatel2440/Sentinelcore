@@ -17,7 +17,7 @@ import base64
 import binascii
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from ipaddress import ip_network
 from typing import Any
 
@@ -67,10 +67,30 @@ class EventFilters:
     q: str | None = None
     asset_id: str | None = None
 
-    def cache_key(self) -> str:
+    def cache_key(self, bucket_seconds: int = 0) -> str:
+        """Stable key for the facet cache.
+
+        `bucket_seconds` snaps the window edges down to a fixed grid. Without it
+        the cache never hits: when a caller omits `from`/`to` the window is
+        derived from `datetime.now()` with microsecond precision, so every
+        request produces a unique key and the expensive aggregation runs every
+        time. Quantising to the cache TTL means requests inside the same bucket
+        share a key; the window edge can then differ by up to `bucket_seconds`,
+        which is immaterial against a multi-hour window and is exactly the
+        staleness the TTL already permits.
+        """
+
+        def _snap(dt: datetime) -> str:
+            if bucket_seconds <= 0:
+                return dt.isoformat()
+            epoch = int(dt.timestamp())
+            return datetime.fromtimestamp(
+                epoch - (epoch % bucket_seconds), tz=timezone.utc
+            ).isoformat()
+
         payload = {
-            "from": self.from_ts.isoformat(),
-            "to": self.to_ts.isoformat(),
+            "from": _snap(self.from_ts),
+            "to": _snap(self.to_ts),
             "severity": sorted(s.value for s in self.severity),
             "event_type": sorted(t.value for t in self.event_type),
             "src_ip": self.src_ip,

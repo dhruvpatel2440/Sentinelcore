@@ -36,6 +36,9 @@ def apply_match(stmt: Select[Any], match: dict[str, Any]) -> Select[Any]:
         stmt = stmt.where(Event.src_ip.op("<<=")(cast(match["src_cidr"], INET)))
     if match.get("dst_cidr"):
         stmt = stmt.where(Event.dst_ip.op("<<=")(cast(match["dst_cidr"], INET)))
+    if "ioc_match" in match:
+        # M12: a correlation rule can require (or exclude) a live IOC hit.
+        stmt = stmt.where(Event.ioc_match.is_(bool(match["ioc_match"])))
     return stmt
 
 

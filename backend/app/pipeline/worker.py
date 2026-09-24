@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.redis import close_redis, get_redis
 from app.correlation.engine import run_forever as run_correlation_engine
 from app.db.session import SessionLocal, engine
+from app.intel.scheduler import run_forever as run_intel_scheduler
 from app.pipeline.partitions import ensure_partitions
 from app.pipeline.retention import enforce_retention
 from app.pipeline.tailer import EveTailer
@@ -79,6 +80,13 @@ async def main() -> int:
     async with SessionLocal() as db:
         await ensure_partitions(db)
 
+    # M12: rebuild the Redis-backed IOC index at startup so matching is live
+    # immediately rather than waiting for the first scheduled feed refresh.
+    from app.intel.matcher import rebuild_index
+
+    async with SessionLocal() as db:
+        await rebuild_index(db, redis)
+
     tailer = EveTailer(settings.suricata_eve_log, redis)
     writer = EventWriter(redis)
     stop = asyncio.Event()
@@ -107,6 +115,7 @@ async def main() -> int:
         asyncio.create_task(run_firewall_expiry(SessionLocal, stop), name="firewall_expiry"),
         asyncio.create_task(run_firewall_reconcile(SessionLocal, redis, stop), name="firewall_reconcile"),
         asyncio.create_task(run_pcap_parser(SessionLocal, redis, stop), name="pcap_parser"),
+        asyncio.create_task(run_intel_scheduler(SessionLocal, redis, stop), name="intel_scheduler"),
     ]
 
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

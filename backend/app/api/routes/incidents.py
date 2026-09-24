@@ -458,12 +458,17 @@ async def assign_incident(
 async def add_comment(
     incident_id: uuid.UUID,
     payload: CommentRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     actor: User = Depends(require_role("analyst", "admin")),
 ) -> IncidentHistoryOut:
     await _get_incident_or_404(db, incident_id)
     entry = IncidentHistory(incident_id=incident_id, user_id=actor.id, action=HistoryAction.COMMENTED, note=payload.note)
     db.add(entry)
+    await audit.record(
+        db, action="incident.commented", user=actor, resource_type="incident", resource_id=incident_id,
+        detail={"note": payload.note}, request=request,
+    )
     await db.commit()
     await db.refresh(entry)
     return IncidentHistoryOut.model_validate(entry, from_attributes=True).model_copy(update={"username": actor.username})

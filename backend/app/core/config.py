@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     pcap_queue_key: str = "pcap:queue"
     pcap_upload_chunk_bytes: int = 1024 * 1024
 
+    # M12 — threat intelligence
+    intel_feed_max_response_mb: int = 50
+    intel_feed_timeout_seconds: int = 30
+    intel_feed_row_cap: int = 200_000
+    intel_feed_scheduler_interval_seconds: int = 300
+    intel_expiry_interval_seconds: int = 3600
+
     # Deployment
     environment: str = "development"
 

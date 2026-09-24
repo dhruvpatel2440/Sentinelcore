@@ -39,6 +39,17 @@ RUN groupadd -g 2000 sentinelcore \
     && useradd -m -u 1000 -G sentinelcore appuser \
     && chown -R appuser:appuser /app
 
+# Storage roots for M9 reports and M11 captures. These MUST exist in the image
+# with group ownership already set: Docker seeds a fresh named volume from the
+# image directory at its mount point, so whatever ownership is here is what the
+# volume gets. Without this the volume is created root:root 0755 and the
+# unprivileged API cannot write to it — uploads and report rendering fail with
+# EACCES at runtime. setgid (2770) keeps new files in the sentinelcore group so
+# the API and worker containers can both read and write them.
+RUN mkdir -p /var/lib/sentinelcore/reports /var/lib/sentinelcore/pcap \
+    && chown -R appuser:sentinelcore /var/lib/sentinelcore \
+    && chmod -R 2770 /var/lib/sentinelcore
+
 # CLAUDE.md: the API never runs as root.
 USER appuser
 
