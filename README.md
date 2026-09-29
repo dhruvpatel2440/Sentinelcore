@@ -1,6 +1,36 @@
-# SentinelCore
+<div align="center">
 
-## 1. What it is
+# 🛡️ SentinelCore
+
+**Modular network detection & incident response platform**
+
+[![Backend](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)](backend)
+[![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Tailwind-61DAFB?logo=react&logoColor=white)](frontend)
+[![Database](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](docker-compose.yml)
+[![Sensor](https://img.shields.io/badge/sensor-Suricata-EE0000)](Modules/M04-suricata-sensor_1.md)
+[![Deploy](https://img.shields.io/badge/deploy-Docker%20Compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey)](#10-team-mentors-licence)
+
+</div>
+
+---
+
+## Table of contents
+
+1. [What it is](#1-what-it-is)
+2. [Architecture](#2-architecture)
+3. [Requirements](#3-requirements)
+4. [Quick start](#4-quick-start)
+5. [Roles](#5-roles)
+6. [Modules](#6-modules)
+7. [Security design](#7-security-design)
+8. [Testing](#8-testing)
+9. [Lab-only warning](#9-lab-only-warning)
+10. [Team, mentors, licence](#10-team-mentors-licence)
+
+---
+
+## 1. 📖 What it is
 
 SentinelCore is a modular network detection and incident response platform:
 Suricata watches a mirrored network link, a rule-based pipeline turns raw
@@ -11,7 +41,9 @@ specific Suricata signature or correlation rule you can read. It deploys as
 one `docker compose up` on a single Ubuntu host with a mirrored capture
 interface — no separate sensor infrastructure to stand up.
 
-## 2. Architecture
+---
+
+## 2. 🏗️ Architecture
 
 ```mermaid
 flowchart LR
@@ -51,7 +83,9 @@ flowchart LR
   `backend/app/pcap/parser.py` and `updates/U03-pcap-parser-isolation.md`
   for why.
 
-## 3. Requirements
+---
+
+## 3. ✅ Requirements
 
 - Ubuntu Server 24.04 (other Linux distros with Docker likely work but are
   untested).
@@ -63,7 +97,9 @@ flowchart LR
   - **WSL is not supported** — WSL's virtualized networking cannot present a
     real mirrored/promiscuous interface to Suricata.
 
-## 4. Quick start
+---
+
+## 4. 🚀 Quick start
 
 ```bash
 cp .env.example .env
@@ -98,7 +134,9 @@ Default ports: `80` (nginx, the only port you should need), `127.0.0.1:5433`
 (backend 8000, frontend 5173, the helper's Unix socket) is internal to the
 Docker network and not published to the host.
 
-## 5. Roles
+---
+
+## 5. 👥 Roles
 
 | Role | Can do |
 |---|---|
@@ -106,7 +144,9 @@ Docker network and not published to the host.
 | analyst | Everything a viewer can, plus triage/resolve incidents, run asset discovery scans, upload/analyze PCAPs, manage IOCs, generate reports. |
 | admin | Everything an analyst can, plus user management, sensor control (start/stop Suricata, rule overrides), firewall containment (block/unblock), threat-intel feed configuration. |
 
-## 6. Modules
+---
+
+## 6. 🧩 Modules
 
 | Module | Summary |
 |---|---|
@@ -129,7 +169,9 @@ this README/CI, dashboard top-talkers, threat model, validation, and
 performance measurement) is tracked in `updates/U00-INDEX.md` through
 `U09-performance-footprint.md`.
 
-## 7. Security design
+---
+
+## 7. 🔒 Security design
 
 - **Privilege separation**: the FastAPI backend runs as an unprivileged
   user (`appuser`, uid ≠ 0) with `cap_drop: [ALL]`. It holds no raw-socket
@@ -148,7 +190,9 @@ performance measurement) is tracked in `updates/U00-INDEX.md` through
   for the table owner), plus a SHA-256 hash chain for tamper evidence — see
   `docs/threat-model.md`.
 
-## 8. Testing
+---
+
+## 8. 🧪 Testing
 
 - **Unit tests**: `docker compose exec backend python -m pytest` (backend),
   `docker compose exec helper python -m pytest` (helper's validation/guard
@@ -160,7 +204,9 @@ performance measurement) is tracked in `updates/U00-INDEX.md` through
 - **`scripts/e2e_browser.py`**: browser-driven smoke test of the frontend
   through the real nginx path.
 
-## 9. Lab-only warning
+---
+
+## 9. ⚠️ Lab-only warning
 
 SentinelCore actively scans and can actively block hosts. **Only run asset
 discovery, vulnerability checks, or firewall containment against networks
@@ -169,7 +215,9 @@ and hosts you own or have explicit written authorization to test.**
 is only as good as what you point it at — never point it at college,
 employer, or third-party infrastructure.
 
-## 10. Team, mentors, licence
+---
+
+## 10. 👤 Team, mentors, licence
 
 Developed by Dhruv Patel and Nisarg Dedakiya. Licence: not yet specified —
 treat this repository as All Rights Reserved until a `LICENSE` file is
