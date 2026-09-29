@@ -1,0 +1,6 @@
+# Deliberately minimal. The helper runs privileged, so every dependency is
+# attack surface — no FastAPI, no SQLAlchemy, no HTTP client.
+scapy==2.5.0
+
+# dev / test
+pytest==8.3.3
