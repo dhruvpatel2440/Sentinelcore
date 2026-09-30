@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  # Not secret — a fixed, obviously-non-production key so CI never depends
+  # on a repo secret existing. Real deployments set their own via .env.
+  SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef
+  DATABASE_URL: postgresql+asyncpg://sentinelcore:sentinelcore@localhost:5432/sentinelcore
+  REDIS_URL: redis://localhost:6379/0
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sentinelcore
+          POSTGRES_PASSWORD: sentinelcore
+          POSTGRES_DB: sentinelcore
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sentinelcore -d sentinelcore"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system libs (WeasyPrint + argon2-cffi native build, mirrors backend/Dockerfile)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libpango-1.0-0 libpangocairo-1.0-0 \
+            libgdk-pixbuf-2.0-0 libcairo2 libffi-dev shared-mime-info fonts-dejavu-core
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run migrations
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: pytest
+        working-directory: backend
+        run: python -m pytest tests -q
+
+  helper-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: helper/requirements.txt
+
+      - name: Install helper dependencies
+        working-directory: helper
+        run: pip install -r requirements.txt
+
+      - name: pytest
+        working-directory: helper
+        # Guards and validation are pure-Python and run everywhere; anything
+        # needing a real raw socket or an actual NIC is marked and skipped —
+        # see the module docstrings for why (CI runners have neither).
+        run: python -m pytest tests -q
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      - name: npm run build
+        working-directory: frontend
+        run: npm run build
+
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No shell=True in backend or helper
+        run: |
+          if grep -rn "shell=True" backend/ helper/ --include="*.py" \
+              | grep -v -E "backend/tests/test_no_subprocess\.py|backend/scripts/e2e_test\.py"; then
+            echo "::error::shell=True found — see CLAUDE.md"
+            exit 1
+          fi
+
+      - name: .env is never tracked
+        run: |
+          if git ls-files | grep -qE '^\.env$'; then
+            echo "::error::.env is tracked by git"
+            exit 1
+          fi
+
+      - name: No hard-coded SECRET_KEY constant
+        run: |
+          if grep -rn 'SECRET_KEY = "' backend/ helper/ --include="*.py"; then
+            echo "::error::hard-coded SECRET_KEY found"
+            exit 1
+          fi
+
+      - name: No os.system( in backend or helper
+        run: |
+          if grep -rn "os\.system(" backend/ helper/ --include="*.py" \
+              | grep -v "backend/tests/test_no_subprocess.py"; then
+            echo "::error::os.system( found — use argv-list subprocess calls via the helper"
+            exit 1
+          fi
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config
+        run: |
+          cp .env.example .env
+          docker compose config -q

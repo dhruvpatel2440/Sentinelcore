@@ -177,6 +177,7 @@ def test_status_reports_stopped_cleanly_when_not_running(monkeypatch):
     assert status["pid"] is None
 
 
+@pytest.mark.skipif(config.suricata_path is None, reason="suricata not available in this environment")
 def test_write_rules_holds_the_lock_across_promote_and_validate(dirs, monkeypatch):
     """Regression: validation used to contend with the write that called it.
 
@@ -184,6 +185,12 @@ def test_write_rules_holds_the_lock_across_promote_and_validate(dirs, monkeypatc
     and *then* validated without already holding the lock, a concurrent op
     could fail the validation and roll back a good ruleset. The validation call
     must therefore be made with exclusive=False from inside the held lock.
+
+    Needs `config.suricata_path` resolved even though `sops.run` is mocked
+    below: `suricata_write_rules` -> `_test_config` checks the binary exists
+    before ever calling `run`. Not present in CI (U04 chose not to install
+    the full Suricata package just for this one path-existence check) or in
+    minimal environments without Suricata installed.
     """
     from helper import executor
 
