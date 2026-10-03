@@ -116,7 +116,7 @@ def render_csv(report_type: str, data: dict[str, Any]) -> bytes:
 
     if report_type == "incident_summary":
         rows = data["table"]
-        fieldnames = ["number", "title", "severity", "status", "opened_at", "closed_at", "assignee"]
+        fieldnames = ["number", "title", "rule", "severity", "status", "opened_at", "closed_at", "assignee"]
     elif report_type == "asset_inventory":
         rows = [
             {

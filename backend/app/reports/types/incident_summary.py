@@ -34,6 +34,7 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
     ack_deltas: list[float] = []
     resolve_deltas: list[float] = []
     rule_counts: dict[str, int] = {}
+    signature_counts: dict[str, int] = {}
     asset_counts: dict[str, int] = {}
     src_ip_counts: dict[str, int] = {}
     opened_by_day: dict[str, int] = {}
@@ -49,6 +50,11 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
             resolve_deltas.append((inc.closed_at - inc.opened_at).total_seconds())
         if inc.rule_id:
             rule_counts[str(inc.rule_id)] = rule_counts.get(str(inc.rule_id), 0) + 1
+        elif inc.signature_name:
+            # PCAP-sourced incidents (app/pcap/detection.py) have no
+            # CorrelationRule row to join against — count them by their
+            # already-human-readable signature name instead of dropping them.
+            signature_counts[inc.signature_name] = signature_counts.get(inc.signature_name, 0) + 1
         if inc.asset_id:
             asset_counts[str(inc.asset_id)] = asset_counts.get(str(inc.asset_id), 0) + 1
         if inc.src_ip:
@@ -69,7 +75,16 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
             out.append({"id": id_str, "name": name or id_str, "count": count})
         return out
 
-    top_rules = await _names(rule_counts, CorrelationRule, "name")
+    # Every rule_id seen, resolved once, reused both for "top rules" and for
+    # the per-incident "rule" column below.
+    rule_names: dict[str, str] = {}
+    for rid in rule_counts:
+        rule = await db.get(CorrelationRule, rid)
+        rule_names[rid] = rule.name if rule else rid
+
+    top_rules = [{"id": rid, "name": rule_names[rid], "count": count} for rid, count in rule_counts.items()]
+    top_rules += [{"id": name, "name": name, "count": count} for name, count in signature_counts.items()]
+    top_rules = sorted(top_rules, key=lambda r: r["count"], reverse=True)[:5]
     top_assets = await _names(asset_counts, Asset, "display_hostname")
     top_src_ips = sorted(src_ip_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
 
@@ -101,6 +116,7 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
                 "title": inc.title,
                 "severity": _val(inc.severity),
                 "status": _val(inc.status),
+                "rule": rule_names.get(str(inc.rule_id)) if inc.rule_id else (inc.signature_name or "manual"),
                 "opened_at": inc.opened_at.isoformat(),
                 "closed_at": inc.closed_at.isoformat() if inc.closed_at else None,
                 "assignee": assignees.get(str(inc.assigned_to)) if inc.assigned_to else None,

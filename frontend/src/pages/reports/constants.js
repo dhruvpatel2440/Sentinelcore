@@ -58,12 +58,6 @@ export function formatBytes(bytes) {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
-export const CRON_PRESETS = [
-  { cron: "0 8 * * 1", label: "Every Monday at 08:00 UTC" },
-  { cron: "0 6 * * *", label: "Every day at 06:00 UTC" },
-  { cron: "0 0 1 * *", label: "On the 1st of every month at 00:00 UTC" },
-];
-
 const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** Best-effort plain-language preview for the common cron shapes this UI offers. */

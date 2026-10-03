@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api/client";
 import Button from "../../components/Button";
@@ -8,9 +8,24 @@ import Modal from "../../components/Modal";
 import Table from "../../components/Table";
 import { useToast } from "../../components/Toast";
 import { absoluteTime, relativeTime } from "../../lib/format";
-import { CRON_PRESETS, FORMATS, REPORT_TYPE_LABEL, REPORT_TYPES, describeCron } from "./constants";
+import { FORMATS, REPORT_TYPE_LABEL, REPORT_TYPES, describeCron } from "./constants";
 
 const RELATIVE_WINDOWS = ["last_7_days", "last_30_days", "last_90_days"];
+
+const DOW_OPTIONS = [
+  { value: "1", label: "Monday" }, { value: "2", label: "Tuesday" }, { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" }, { value: "5", label: "Friday" }, { value: "6", label: "Saturday" },
+  { value: "0", label: "Sunday" },
+];
+
+/** Builds a cron string from structured frequency/time/day inputs — the UI
+ * never asks a non-cron-fluent user to hand-write one. */
+function buildCron({ frequency, time, dayOfWeek, dayOfMonth }) {
+  const [hour, minute] = (time || "06:00").split(":");
+  if (frequency === "weekly") return `${minute} ${hour} * * ${dayOfWeek}`;
+  if (frequency === "monthly") return `${minute} ${hour} ${dayOfMonth} * *`;
+  return `${minute} ${hour} * * *`;
+}
 
 export default function SchedulesTab() {
   const toast = useToast();
@@ -20,8 +35,17 @@ export default function SchedulesTab() {
   const [reportType, setReportType] = useState("event_statistics");
   const [format, setFormat] = useState("pdf");
   const [window_, setWindow] = useState("last_7_days");
-  const [cron, setCron] = useState(CRON_PRESETS[0].cron);
+  const [frequency, setFrequency] = useState("daily"); // daily | weekly | monthly | custom
+  const [time, setTime] = useState("06:00");
+  const [dayOfWeek, setDayOfWeek] = useState("1");
+  const [dayOfMonth, setDayOfMonth] = useState("1");
+  const [customCron, setCustomCron] = useState("0 6 * * *");
   const [submitting, setSubmitting] = useState(false);
+
+  const cron = useMemo(
+    () => (frequency === "custom" ? customCron : buildCron({ frequency, time, dayOfWeek, dayOfMonth })),
+    [frequency, time, dayOfWeek, dayOfMonth, customCron]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,28 +214,83 @@ export default function SchedulesTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-300">Cron</label>
+            <label className="text-xs font-medium text-slate-300">Repeats</label>
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {CRON_PRESETS.map((p) => (
+              {[
+                { key: "daily", label: "Daily" },
+                { key: "weekly", label: "Weekly" },
+                { key: "monthly", label: "Monthly" },
+                { key: "custom", label: "Custom (cron)" },
+              ].map((f) => (
                 <button
-                  key={p.cron}
+                  key={f.key}
                   type="button"
-                  onClick={() => setCron(p.cron)}
+                  onClick={() => setFrequency(f.key)}
                   className={`rounded-md border px-2 py-1 text-xs ${
-                    cron === p.cron ? "border-sky-500 text-sky-300" : "border-slate-700 text-slate-300 hover:border-sky-500"
+                    frequency === f.key ? "border-sky-500 text-sky-300" : "border-slate-700 text-slate-300 hover:border-sky-500"
                   }`}
                 >
-                  {p.label}
+                  {f.label}
                 </button>
               ))}
             </div>
-            <input
-              value={cron}
-              onChange={(e) => setCron(e.target.value)}
-              className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
-            />
-            <p className="mt-1 text-xs text-slate-500">{describeCron(cron)}</p>
           </div>
+
+          {frequency !== "custom" ? (
+            <div className="grid grid-cols-2 gap-3">
+              {frequency === "weekly" && (
+                <div>
+                  <label className="text-xs font-medium text-slate-300">Day of week</label>
+                  <select
+                    value={dayOfWeek}
+                    onChange={(e) => setDayOfWeek(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  >
+                    {DOW_OPTIONS.map((d) => (
+                      <option key={d.value} value={d.value}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {frequency === "monthly" && (
+                <div>
+                  <label className="text-xs font-medium text-slate-300">Day of month</label>
+                  <select
+                    value={dayOfMonth}
+                    onChange={(e) => setDayOfMonth(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="text-xs font-medium text-slate-300">Time (UTC)</label>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-medium text-slate-300">Cron</label>
+              <input
+                value={customCron}
+                onChange={(e) => setCustomCron(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
+              />
+            </div>
+          )}
+          <p className="text-xs text-slate-500">{describeCron(cron)}</p>
         </div>
       </Modal>
     </>

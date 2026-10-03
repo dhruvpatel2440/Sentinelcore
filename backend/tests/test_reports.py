@@ -118,6 +118,33 @@ async def test_incident_summary_build_matches_hand_calculated_aggregates():
 
 
 @pytest.mark.asyncio
+async def test_incident_summary_counts_signature_sourced_incidents_as_a_rule():
+    """PCAP-sourced incidents (app/pcap/detection.py) have rule_id=None and a
+    signature_name instead — they must still show up in top_rules and carry
+    a real "rule" value per row, not silently drop out of the report."""
+    async with SessionLocal() as db:
+        now = datetime(2099, 7, 1, tzinfo=UTC)
+        tag = uuid.uuid4().hex[:8]
+        inc = Incident(
+            title=f"m9-sig-{tag}", severity="high", status=IncidentStatus.NEW, opened_at=now,
+            signature_name=f"PCAP-DNS-TUNNEL-001 — {tag}", evidence={"domain": "evil-example.net"},
+        )
+        db.add(inc)
+        await db.commit()
+        ids = [inc.id]
+
+        try:
+            data = await incident_summary.build(
+                {"from": (now - timedelta(hours=1)).isoformat(), "to": (now + timedelta(minutes=1)).isoformat()}, db
+            )
+            assert data["total_incidents"] == 1
+            assert data["top_rules"] == [{"id": inc.signature_name, "name": inc.signature_name, "count": 1}]
+            assert data["table"][0]["rule"] == inc.signature_name
+        finally:
+            await _cleanup_incidents(db, ids)
+
+
+@pytest.mark.asyncio
 async def test_asset_inventory_build_flags_stale_and_high_risk(monkeypatch):
     from app.models.asset import Asset, AssetPort, PortState, Protocol
 
