@@ -29,8 +29,9 @@ done
 
 cd "$HERE"
 say "Verifying package signature and checksums ..."
-[ -f checksums/SHA256SUMS ] && [ -f signatures/SHA256SUMS.asc ] && [ -f packaging/release-key.asc ] \
-  || die "checksums or signature missing from the package"
+if [ ! -f checksums/SHA256SUMS ] || [ ! -f signatures/SHA256SUMS.asc ] || [ ! -f packaging/release-key.asc ]; then
+  die "checksums or signature missing from the package"
+fi
 GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
 trap 'rm -rf "$GNUPGHOME"' EXIT INT TERM
 GOT_FPR="$(gpg --batch --with-colons --show-keys packaging/release-key.asc | awk -F: '$1=="fpr"{print $10; exit}')"

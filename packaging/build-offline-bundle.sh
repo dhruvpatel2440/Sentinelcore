@@ -13,7 +13,6 @@ VERSION="${1:?usage: build-offline-bundle.sh <version> <deb> <images.json> [outd
 DEB="${2:?path to the .deb}"
 IMAGES_JSON="${3:?path to images.json}"
 OUTDIR="${4:-dist}"
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="sentinelcore-offline-$VERSION"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -58,6 +57,7 @@ exec sentinelcore install --offline-bundle "$HERE" "$@"
 EOS
 chmod 0755 "$B/install-offline.sh"
 
+# shellcheck disable=SC2094  # SHA256SUMS is excluded from the find, so it is not read while written
 ( cd "$B" && find . -type f ! -name SHA256SUMS ! -name SHA256SUMS.asc -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS )
 if [[ -n "${GPG_KEY:-}" ]]; then
   pin=()
