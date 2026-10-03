@@ -76,7 +76,8 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
             "closed_by": closer.username if closer else None,
             "resolution_note": incident.resolution_note,
             "assignee": assignee.username if assignee else None,
-            "rule_name": rule.name if rule else None,
+            "rule_name": rule.name if rule else incident.signature_name,
+            "evidence": incident.evidence,
         },
         "asset": (
             {

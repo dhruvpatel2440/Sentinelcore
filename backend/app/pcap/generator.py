@@ -123,6 +123,23 @@ async def parse_pcap(pcap_id: uuid.UUID, sessionmaker: async_sessionmaker[AsyncS
         except Exception:  # noqa: BLE001 — IOC matching must never fail a parse that already succeeded
             logger.exception("pcap %s: ioc matching pass failed", pcap_id)
 
+        # U11: signature-based detection over the flows/artifacts just
+        # written. Must never fail a parse that already succeeded.
+        try:
+            from app.pcap.detection import create_incidents_for_findings, run_detections
+
+            async with sessionmaker() as db:
+                findings = await run_detections(db, pcap_id)
+                if findings:
+                    pcap = await db.get(PcapFile, pcap_id)
+                    created = await create_incidents_for_findings(db, pcap, findings)
+                    logger.info(
+                        "pcap %s: %d incident(s) created from %d finding(s)",
+                        pcap_id, len(created), len(findings),
+                    )
+        except Exception:  # noqa: BLE001
+            logger.exception("pcap %s: detection pass failed", pcap_id)
+
     except Exception as exc:  # noqa: BLE001 — must always resolve the row
         logger.error("pcap %s parse failed: %s", pcap_id, exc)
         async with sessionmaker() as db:

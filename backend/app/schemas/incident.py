@@ -26,6 +26,8 @@ class IncidentOut(BaseModel):
     assigned_to: uuid.UUID | None
     rule_id: uuid.UUID | None
     candidate_id: uuid.UUID | None
+    signature_name: str | None = None
+    evidence: dict[str, Any] | None = None
     event_count: int
     first_event_ts: datetime | None
     last_event_ts: datetime | None

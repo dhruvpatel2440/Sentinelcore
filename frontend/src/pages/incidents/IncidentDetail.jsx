@@ -312,6 +312,17 @@ export default function IncidentDetail() {
               <p className="text-sm text-slate-200">{incident.asset_hostname}</p>
             </Card>
           )}
+          {incident.evidence && (
+            <Card title="Evidence">
+              <dl className="space-y-3">
+                {Object.entries(incident.evidence).map(([key, value]) => (
+                  <Field key={key} label={key.replace(/_/g, " ")}>
+                    {Array.isArray(value) ? value.join(", ") || "—" : String(value ?? "—")}
+                  </Field>
+                ))}
+              </dl>
+            </Card>
+          )}
         </div>
 
         <Card

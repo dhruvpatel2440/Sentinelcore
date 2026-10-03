@@ -22,6 +22,16 @@
 <h2>Description</h2>
 <p>{{ i.description or "—" }}</p>
 
+{% if i.evidence %}
+<h2>Evidence</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  {% for key, value in i.evidence.items() %}
+  <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 {% if data.asset %}
 <h2>Affected asset</h2>
 <table>
