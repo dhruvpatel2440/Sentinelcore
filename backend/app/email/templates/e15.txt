@@ -1,0 +1,11 @@
+{% extends "base.txt" %}
+{% block content %}
+{% if since %}
+The Suricata sensor appears to be down since {{ since }}.
+Last event received: {{ last_event_at or "never" }}
+{% elif was_down_since %}
+The Suricata sensor has recovered. It was down since {{ was_down_since }}.
+{% else %}
+{{ reason or "Email delivery system health notice." }}
+{% endif %}
+{% endblock %}

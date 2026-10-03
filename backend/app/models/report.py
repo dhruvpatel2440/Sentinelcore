@@ -59,6 +59,13 @@ class Report(Base):
     requested_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # U10: set when this report was produced by a schedule (drives E11,
+    # which emails `schedule.recipients` rather than `requested_by`).
+    schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("report_schedules.id", ondelete="SET NULL"), nullable=True
+    )
+    # U10: the on-demand requester ticked "email me when ready" (E12).
+    notify_requester: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)

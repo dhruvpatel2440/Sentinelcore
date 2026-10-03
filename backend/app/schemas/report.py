@@ -66,6 +66,8 @@ class ReportCreate(BaseModel):
     format: ReportFormat
     params: dict[str, Any]
     title: str | None = Field(default=None, max_length=255)
+    # U10 — E12: email the requester a link when this on-demand report finishes.
+    notify_requester: bool = False
 
 
 class ReportOut(BaseModel):

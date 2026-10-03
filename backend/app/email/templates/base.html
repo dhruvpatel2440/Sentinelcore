@@ -1,0 +1,53 @@
+{% macro severity_color(sev) -%}
+{%- if sev == 'critical' -%}#b91c1c
+{%- elif sev == 'high' -%}#ea580c
+{%- elif sev == 'medium' -%}#ca8a04
+{%- elif sev == 'low' -%}#16a34a
+{%- else -%}#64748b
+{%- endif -%}
+{%- endmacro %}
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ heading }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f1f5f9; font-family:'Segoe UI',Arial,sans-serif; color:#1e293b;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9; padding:24px 0;">
+<tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden;">
+  <tr>
+    <td style="background:#0f172a; padding:16px 24px;">
+      <span style="color:#ffffff; font-size:16px; font-weight:bold;">SentinelCore</span>
+    </td>
+  </tr>
+  {% if severity %}
+  <tr>
+    <td style="background:{{ severity_color(severity) }}; padding:6px 24px; color:#ffffff; font-size:12px; font-weight:bold; text-transform:uppercase;">
+      {{ severity }}
+    </td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:24px;">
+      <h1 style="font-size:18px; margin:0 0 12px;">{{ heading }}</h1>
+      {% block content %}{% endblock %}
+      {% if button_label and button_url %}
+      <p style="margin:24px 0 0;">
+        <a href="{{ button_url }}" style="display:inline-block; background:#2563eb; color:#ffffff; text-decoration:none; padding:10px 20px; border-radius:6px; font-weight:bold; font-size:14px;">{{ button_label }}</a>
+      </p>
+      {% endif %}
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 24px; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8;">
+      You received this because {{ why_you_got_this | default('you are subscribed to SentinelCore alerts.') }}
+      &middot; <a href="{{ prefs_url }}" style="color:#64748b;">Manage notification preferences</a>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

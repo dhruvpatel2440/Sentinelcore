@@ -1,0 +1,9 @@
+{% extends "base.txt" %}
+{% block content %}
+Your scheduled report is ready.
+Type: {{ report_type }}
+Window: {{ window }}
+Format: {{ format }}
+Generated: {{ generated_at }}
+{% if attached %}The report is attached to this email.{% else %}The report exceeded the attachment size limit - use the link below to download it (sign-in required).{% endif %}
+{% endblock %}

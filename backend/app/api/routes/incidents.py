@@ -13,6 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
 from app.db.session import get_db
+from app.email import recipients as email_recipients
+from app.email.render import app_link
+from app.email.service import Recipient, enqueue, resolve_recipients_from_users
+from app.email.types import EmailType
 from app.models.asset import Asset
 from app.models.correlation import CorrelationRule
 from app.models.event import Event, Severity
@@ -59,6 +63,82 @@ def _decode_cursor(cursor: str) -> tuple:
         return value, uuid.UUID(id_)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=422, detail="cursor is malformed") from exc
+
+
+async def _notify_assigned(db: AsyncSession, incident: Incident, *, assigned_by: User, assignee_id: uuid.UUID) -> None:
+    recips = await resolve_recipients_from_users(db, await email_recipients.by_id(db, assignee_id))
+    if not recips:
+        return
+    await enqueue(
+        db,
+        email_type=EmailType.E03_INCIDENT_ASSIGNED,
+        recipients=recips,
+        heading=f"Incident #{incident.number} assigned to you",
+        render_context={
+            "incident_number": incident.number, "title": incident.title,
+            "severity": incident.severity.value, "assigned_by": assigned_by.username,
+        },
+        severity=incident.severity,
+        dedupe_key=lambda r, inc=incident: f"E03:{inc.id}:{assignee_id}:{inc.version}",
+        related_type="incident", related_id=str(incident.id),
+        button_label="Open incident", button_url=app_link(f"/incidents/{incident.id}"),
+        why_you_got_this="an incident was assigned to you.",
+    )
+    await db.commit()
+
+
+async def _notify_escalated(db: AsyncSession, incident: Incident, *, old_severity: Severity) -> None:
+    targets: list[User] = []
+    if incident.assigned_to is not None:
+        targets = await email_recipients.by_id(db, incident.assigned_to)
+    if not targets:
+        targets = await email_recipients.admins(db)
+    recips = await resolve_recipients_from_users(db, targets)
+    if not recips:
+        return
+    await enqueue(
+        db,
+        email_type=EmailType.E02_INCIDENT_ESCALATED,
+        recipients=recips,
+        heading=f"Incident #{incident.number} escalated to {incident.severity.value}",
+        render_context={
+            "incident_number": incident.number, "old_severity": old_severity.value,
+            "new_severity": incident.severity.value, "what_changed": "Severity was raised.",
+            "new_top_signatures": [],
+        },
+        severity=incident.severity,
+        dedupe_key=lambda r, inc=incident: f"E02:{inc.id}:{inc.severity.value}",
+        related_type="incident", related_id=str(incident.id),
+        button_label="Open incident", button_url=app_link(f"/incidents/{incident.id}"),
+        why_you_got_this="an incident you are involved with was escalated.",
+    )
+    await db.commit()
+
+
+async def _notify_resolved(db: AsyncSession, incident: Incident, *, acted_by: User, reopened: bool) -> None:
+    targets: list[User] = await email_recipients.admins(db) if reopened else []
+    if incident.assigned_to is not None:
+        targets = targets + await email_recipients.by_id(db, incident.assigned_to)
+    recips = await resolve_recipients_from_users(db, targets)
+    if not recips:
+        return
+    await enqueue(
+        db,
+        email_type=EmailType.E05_INCIDENT_RESOLVED,
+        recipients=recips,
+        heading=f"Incident #{incident.number} {'reopened' if reopened else 'resolved'}",
+        render_context={
+            "incident_number": incident.number,
+            "final_status": incident.status.value,
+            "resolution_note": (incident.resolution_note or "")[:500],
+            "acted_by": acted_by.username,
+        },
+        dedupe_key=lambda r, inc=incident: f"E05:{inc.id}:{inc.version}",
+        related_type="incident", related_id=str(incident.id),
+        button_label="Open incident", button_url=app_link(f"/incidents/{incident.id}"),
+        why_you_got_this="you are involved with this incident.",
+    )
+    await db.commit()
 
 
 async def _get_incident_or_404(db: AsyncSession, incident_id: uuid.UUID) -> Incident:
@@ -329,6 +409,8 @@ async def update_incident(
 
     changes = payload.model_dump(exclude_unset=True, exclude={"version"})
 
+    severity_escalated = False
+    old_severity = incident.severity
     if "severity" in changes and changes["severity"] != incident.severity:
         db.add(
             IncidentHistory(
@@ -336,7 +418,11 @@ async def update_incident(
                 from_value=incident.severity.value, to_value=changes["severity"].value,
             )
         )
+        severity_escalated = _SEVERITY_RANK[changes["severity"]] < _SEVERITY_RANK[incident.severity]
+
+    new_assignee: uuid.UUID | None = None
     if "assigned_to" in changes and changes["assigned_to"] != incident.assigned_to:
+        new_assignee = changes["assigned_to"]
         db.add(
             IncidentHistory(
                 incident_id=incident.id, user_id=actor.id, action=HistoryAction.ASSIGNED,
@@ -355,6 +441,12 @@ async def update_incident(
     )
     await db.commit()
     await db.refresh(incident)
+
+    if severity_escalated:
+        await _notify_escalated(db, incident, old_severity=old_severity)
+    if new_assignee is not None:
+        await _notify_assigned(db, incident, assigned_by=actor, assignee_id=new_assignee)
+
     return IncidentOut.model_validate(incident, from_attributes=True)
 
 
@@ -413,6 +505,10 @@ async def change_status(
     )
     await db.commit()
     await db.refresh(incident)
+
+    if entering_terminal or reopening:
+        await _notify_resolved(db, incident, acted_by=actor, reopened=reopening)
+
     return IncidentOut.model_validate(incident, from_attributes=True)
 
 
@@ -451,6 +547,10 @@ async def assign_incident(
     )
     await db.commit()
     await db.refresh(incident)
+
+    if payload.user_id is not None:
+        await _notify_assigned(db, incident, assigned_by=actor, assignee_id=payload.user_id)
+
     return IncidentOut.model_validate(incident, from_attributes=True)
 
 

@@ -1,0 +1,5 @@
+{% extends "base.txt" %}
+{% block content %}
+Incident #{{ incident_number }} is now {{ final_status }}, by {{ acted_by }}.
+{% if resolution_note %}{{ resolution_note }}{% endif %}
+{% endblock %}

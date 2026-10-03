@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Incident #{{ incident_number }} is now <strong>{{ final_status }}</strong>, by {{ acted_by }}.</p>
+{% if resolution_note %}<p style="color:#64748b;">{{ resolution_note }}</p>{% endif %}
+{% endblock %}

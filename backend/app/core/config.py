@@ -81,6 +81,29 @@ class Settings(BaseSettings):
     intel_feed_row_cap: int = 200_000
     intel_feed_scheduler_interval_seconds: int = 300
     intel_expiry_interval_seconds: int = 3600
+    intel_match_email_min_confidence: int = 70  # E06 threshold
+
+    # U10 — email notifications (Brevo)
+    email_mode: str = "off"  # off | dry_run | brevo
+    brevo_api_key: str = ""
+    email_sender_address: str = ""
+    email_sender_name: str = "SentinelCore"
+    email_reply_to: str = ""
+    app_base_url: str = "https://sentinel.lab"
+    email_allowed_recipient_domains: str = ""  # comma list; empty = any registered user email
+    email_daily_cap_per_recipient: int = 50
+    email_global_daily_cap: int = 250
+    email_max_attachment_mb: int = 5
+    brevo_webhook_secret: str = ""
+    incident_sla_minutes_critical: int = 15
+    incident_sla_minutes_high: int = 60
+    incident_sla_minutes_medium: int = 240
+    email_outbox_drain_interval_seconds: int = 5
+    email_outbox_reaper_stuck_minutes: int = 5
+    email_health_scan_interval_seconds: int = 60
+    email_outbox_retention_sent_days: int = 30
+    email_outbox_retention_failed_days: int = 90
+    email_send_empty_digest: bool = False
 
     # Deployment
     environment: str = "development"
@@ -102,6 +125,26 @@ class Settings(BaseSettings):
         if not isinstance(net, IPv4Network):
             raise ValueError("MONITORED_NETWORK must be an IPv4 network")
         return net
+
+    @cached_property
+    def email_allowed_recipient_domains_parsed(self) -> frozenset[str]:
+        return frozenset(
+            d.strip().lower() for d in self.email_allowed_recipient_domains.split(",") if d.strip()
+        )
+
+    @cached_property
+    def email_mode_resolved(self) -> str:
+        """Falls back to `off` if `brevo` mode is missing its key/sender —
+        never crashes the app over an email misconfiguration."""
+        if self.email_mode == "brevo" and (not self.brevo_api_key or not self.email_sender_address):
+            import logging
+
+            logging.getLogger("sentinelcore.email").error(
+                "EMAIL_MODE=brevo but BREVO_API_KEY or EMAIL_SENDER_ADDRESS is missing; "
+                "falling back to EMAIL_MODE=off"
+            )
+            return "off"
+        return self.email_mode
 
     @cached_property
     def protected_ips_parsed(self) -> frozenset[IPv4Address]:

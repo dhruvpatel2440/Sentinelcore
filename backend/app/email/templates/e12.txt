@@ -1,0 +1,4 @@
+{% extends "base.txt" %}
+{% block content %}
+Your on-demand report is ready.
+{% endblock %}

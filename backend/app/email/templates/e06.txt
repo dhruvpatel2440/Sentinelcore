@@ -1,0 +1,10 @@
+{% extends "base.txt" %}
+{% block content %}
+A threat-intel indicator matched traffic involving a monitored asset.
+Indicator: {{ ioc_type }}: {{ ioc_value_defanged }}
+Feed: {{ feed_name }}
+Confidence: {{ confidence }}
+First seen: {{ first_seen }}
+Last seen: {{ last_seen }}
+Matched asset: {{ asset }}
+{% endblock %}

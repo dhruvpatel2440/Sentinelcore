@@ -20,9 +20,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
+from app.email import recipients as email_recipients
+from app.email.render import app_link, defang
+from app.email.service import enqueue, resolve_recipients_from_users
+from app.email.types import EmailType
 from app.models.correlation import CandidateStatus, CorrelationRule, IncidentCandidate
+from app.models.event import Severity
 from app.models.incident import TERMINAL_STATUSES, HistoryAction, Incident, IncidentEvent, IncidentHistory
 from app.services.incident_state import IncidentStatus
+
+_E01_SEVERITIES = (Severity.HIGH, Severity.CRITICAL)
 
 logger = logging.getLogger("sentinelcore.incidents.promotion")
 
@@ -146,6 +153,44 @@ async def promote_candidate(candidate_id, sessionmaker: async_sessionmaker[Async
         candidate.incident_id = incident.id
         await db.commit()
         logger.info("promoted candidate %s to incident INC-%s", candidate.id, incident.number)
+
+        if incident.severity in _E01_SEVERITIES:
+            await _send_new_incident_email(db, incident, rule, candidate)
+
+
+async def _send_new_incident_email(db: AsyncSession, incident: Incident, rule: CorrelationRule, candidate: IncidentCandidate) -> None:
+    users = await email_recipients.analysts_and_admins(db)
+    recips = await resolve_recipients_from_users(db, users)
+    if not recips:
+        return
+
+    signatures = list(candidate.evidence.get("top_signatures", []))[:5]
+    await enqueue(
+        db,
+        email_type=EmailType.E01_NEW_INCIDENT,
+        recipients=recips,
+        heading=f"Incident #{incident.number} — {incident.title}",
+        render_context={
+            "incident_number": incident.number,
+            "title": incident.title,
+            "status": incident.status.value,
+            "first_seen": incident.first_event_ts.isoformat() if incident.first_event_ts else "unknown",
+            "last_seen": incident.last_event_ts.isoformat() if incident.last_event_ts else "unknown",
+            "src_ip_defanged": defang(str(incident.src_ip)) if incident.src_ip else None,
+            "target": str(incident.dst_ip) if incident.dst_ip else None,
+            "event_count": incident.event_count,
+            "rule_name": rule.name,
+            "signatures": signatures,
+        },
+        severity=incident.severity,
+        dedupe_key=lambda r, inc=incident: f"E01:{inc.id}:{r.user_id}",
+        related_type="incident",
+        related_id=str(incident.id),
+        button_label="Open incident",
+        button_url=app_link(f"/incidents/{incident.id}"),
+        why_you_got_this="a new high/critical severity incident was opened and you opted in to this alert.",
+    )
+    await db.commit()
 
 
 async def run_forever(

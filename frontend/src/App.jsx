@@ -5,9 +5,11 @@ import AssetsPage from "./pages/assets/AssetsPage";
 import CorrelationPage from "./pages/correlation/CorrelationPage";
 import EventsPage from "./pages/events/EventsPage";
 import FirewallPage from "./pages/firewall/FirewallPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import IncidentDetail from "./pages/incidents/IncidentDetail";
 import IncidentsPage from "./pages/incidents/IncidentsPage";
 import LoginPage from "./pages/LoginPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SensorPage from "./pages/sensor/SensorPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PcapDetail from "./pages/pcap/PcapDetail";
@@ -15,7 +17,9 @@ import PcapPage from "./pages/pcap/PcapPage";
 import IntelPage from "./pages/intel/IntelPage";
 import IocDetail from "./pages/intel/IocDetail";
 import OverviewPage from "./pages/overview/OverviewPage";
+import EmailPage from "./pages/admin/EmailPage";
 import UsersPage from "./pages/admin/UsersPage";
+import NotificationsPage from "./pages/profile/NotificationsPage";
 import ReportsPage from "./pages/reports/ReportsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -28,10 +32,14 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route index element={<OverviewPage />} />
+
+          <Route path="profile/notifications" element={<NotificationsPage />} />
 
           <Route path="assets" element={<AssetsPage />} />
 
@@ -74,6 +82,15 @@ export default function App() {
             element={
               <ProtectedRoute roles={["admin"]}>
                 <UsersPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="admin/email"
+            element={
+              <ProtectedRoute roles={["admin"]}>
+                <EmailPage />
               </ProtectedRoute>
             }
           />

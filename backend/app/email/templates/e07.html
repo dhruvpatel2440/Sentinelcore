@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<p>A firewall block was applied.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">Target</td><td>{{ target }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Direction / protocol / port</td><td>{{ direction }} / {{ protocol or "any" }} / {{ port or "any" }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">TTL</td><td>{{ ttl_seconds }}s, expires {{ expires_at_utc }} UTC ({{ expires_at_local }} lab local)</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Requested by</td><td>{{ requester }}</td></tr>
+  {% if incident_number %}<tr><td style="color:#64748b; padding:4px 0;">Linked incident</td><td>#{{ incident_number }}</td></tr>{% endif %}
+</table>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% extends "base.txt" %}
+{% block content %}
+A firewall block requested by {{ requester }} against {{ target }} was refused.
+Reason: {{ reason }}
+{% endblock %}

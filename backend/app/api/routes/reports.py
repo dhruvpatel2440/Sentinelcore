@@ -85,6 +85,7 @@ async def create_report(
         format=payload.format,
         status=ReportStatus.QUEUED,
         requested_by=actor.id,
+        notify_requester=payload.notify_requester,
     )
     db.add(report)
     await db.flush()

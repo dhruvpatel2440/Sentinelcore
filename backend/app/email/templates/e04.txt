@@ -1,0 +1,4 @@
+{% extends "base.txt" %}
+{% block content %}
+Incident #{{ incident_number }} has been {{ status }} for {{ age_minutes }} minute(s) - past its SLA ({{ stage }}).
+{% endblock %}

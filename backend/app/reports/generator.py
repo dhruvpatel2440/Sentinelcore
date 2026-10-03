@@ -18,7 +18,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
-from app.models.report import Report, ReportFormat, ReportStatus
+from app.email.render import app_link
+from app.email.service import Recipient, enqueue, resolve_recipients_from_users
+from app.email.types import EmailType
+from app.models.report import Report, ReportFormat, ReportSchedule, ReportStatus
 from app.models.user import User
 from app.reports import render
 from app.reports.types import REGISTRY
@@ -86,6 +89,7 @@ async def generate_report(report_id: uuid.UUID, sessionmaker: async_sessionmaker
             report.expires_at = report.completed_at + timedelta(days=settings.report_retention_days)
             await db.commit()
             logger.info("report %s (%s) completed: %s", report.id, report.report_type.value, path)
+            await _notify_report_completed(db, report)
 
     except Exception as exc:  # noqa: BLE001 — must always resolve the row, never leave it running
         logger.error("report %s failed: %s", report_id, exc)
@@ -96,6 +100,84 @@ async def generate_report(report_id: uuid.UUID, sessionmaker: async_sessionmaker
                 report.error = str(exc)[:4000]
                 report.completed_at = datetime.now(timezone.utc)
                 await db.commit()
+                await _notify_report_failed(db, report, exc)
+
+
+async def _notify_report_completed(db: AsyncSession, report: Report) -> None:
+    """E11 (scheduled, to the schedule's recipient list) or E12 (on-demand,
+    only if the requester ticked "email me") — never both for one report."""
+    if report.schedule_id is not None:
+        schedule = await db.get(ReportSchedule, report.schedule_id)
+        if schedule is None or not schedule.recipients:
+            return
+        recips = [Recipient(email=e) for e in schedule.recipients]
+        within_cap = (report.file_size or 0) <= settings.email_max_attachment_mb * 1024 * 1024
+        await enqueue(
+            db,
+            email_type=EmailType.E11_REPORT_DELIVERED,
+            recipients=recips,
+            heading=f"Scheduled report ready: {report.title}",
+            render_context={
+                "report_type": report.report_type.value,
+                "window": report.params.get("window", "n/a"),
+                "format": report.format.value,
+                "generated_at": report.completed_at.isoformat() if report.completed_at else "",
+                "attached": within_cap,
+            },
+            dedupe_key=lambda r, rep=report: f"E11:{rep.id}:{r.email}",
+            related_type="report", related_id=str(report.id),
+            button_label="Download report", button_url=app_link(f"/reports/{report.id}"),
+            why_you_got_this="you are listed as a recipient on this scheduled report.",
+        )
+        await db.commit()
+        return
+
+    if report.notify_requester and report.requested_by is not None:
+        requester = await db.get(User, report.requested_by)
+        recips = await resolve_recipients_from_users(db, [requester] if requester else [])
+        if not recips:
+            return
+        await enqueue(
+            db,
+            email_type=EmailType.E12_REPORT_READY,
+            recipients=recips,
+            heading=f"Your report is ready: {report.title}",
+            render_context={},
+            dedupe_key=lambda r, rep=report: f"E12:{rep.id}",
+            related_type="report", related_id=str(report.id),
+            button_label="Open report", button_url=app_link(f"/reports/{report.id}"),
+            why_you_got_this="you asked to be emailed when this report finished.",
+        )
+        await db.commit()
+
+
+async def _notify_report_failed(db: AsyncSession, report: Report, exc: Exception) -> None:
+    from app.email import recipients as email_recipients
+
+    targets: list[User] = list(await email_recipients.admins(db))
+    if report.requested_by is not None:
+        requester = await db.get(User, report.requested_by)
+        if requester is not None:
+            targets.append(requester)
+    recips = await resolve_recipients_from_users(db, targets)
+    if not recips:
+        return
+    await enqueue(
+        db,
+        email_type=EmailType.E13_REPORT_FAILED,
+        recipients=recips,
+        heading=f"Report failed to generate: {report.title}",
+        render_context={
+            "report_type": report.report_type.value,
+            "window": report.params.get("window", "n/a"),
+            "error_class": type(exc).__name__,
+        },
+        dedupe_key=lambda r, rep=report: f"E13:{rep.id}:{r.email}",
+        related_type="report", related_id=str(report.id),
+        button_label="Retry", button_url=app_link("/reports"),
+        why_you_got_this="you requested this report, or you are an administrator.",
+    )
+    await db.commit()
 
 
 async def reconcile_stuck_reports(sessionmaker: async_sessionmaker[AsyncSession]) -> int:

@@ -1,0 +1,5 @@
+{% extends "base.txt" %}
+{% block content %}
+Firewall block on {{ target }} is now {{ reason }}{% if revoked_by %}, by {{ revoked_by }}{% endif %}.
+{% if removal_failed %}WARNING: the rule could not be removed from the kernel. Manual verification is required.{% endif %}
+{% endblock %}

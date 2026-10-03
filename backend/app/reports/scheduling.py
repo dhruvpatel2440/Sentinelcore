@@ -68,6 +68,7 @@ async def run_due_schedules(sessionmaker: async_sessionmaker[AsyncSession], redi
                 format=schedule.format,
                 status=ReportStatus.QUEUED,
                 requested_by=schedule.created_by,
+                schedule_id=schedule.id,
             )
             db.add(report)
             await db.flush()

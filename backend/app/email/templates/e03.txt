@@ -1,0 +1,4 @@
+{% extends "base.txt" %}
+{% block content %}
+Incident #{{ incident_number }} - {{ title }} ({{ severity }}) was assigned to you by {{ assigned_by }}.
+{% endblock %}

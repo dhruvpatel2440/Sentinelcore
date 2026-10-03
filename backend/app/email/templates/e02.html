@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Incident #{{ incident_number }} escalated from <strong>{{ old_severity }}</strong> to <strong>{{ new_severity }}</strong>.</p>
+<p>{{ what_changed }}</p>
+{% if new_top_signatures %}
+<p style="color:#64748b;">New top signatures:</p>
+<ul>{% for s in new_top_signatures[:5] %}<li>{{ s }}</li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

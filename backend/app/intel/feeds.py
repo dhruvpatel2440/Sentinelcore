@@ -21,11 +21,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.redis import get_redis
+from app.email import recipients as email_recipients
+from app.email.service import enqueue, resolve_recipients_from_users
+from app.email.types import EmailType
 from app.intel.matcher import rebuild_index
 from app.intel.normalize import NormalizationError, normalize
 from app.models.ioc import Ioc, IocSource, SourceFormat
 
 logger = logging.getLogger("sentinelcore.intel.feeds")
+
+# E17: in-process consecutive-failure counter per source — a worker restart
+# resets it, which only delays the alert by at most one fetch cycle.
+FEED_FAIL_ALERT_THRESHOLD = 3
+_consecutive_failures: dict[str, int] = {}
+_last_success_at: dict[str, str] = {}
+
+
+async def _notify_feed_failing(db: AsyncSession, source: IocSource) -> None:
+    users = await email_recipients.admins(db)
+    recips = await resolve_recipients_from_users(db, users)
+    if not recips:
+        return
+    today = datetime.now(timezone.utc).date()
+    await enqueue(
+        db,
+        email_type=EmailType.E17_FEED_FAILING,
+        recipients=recips,
+        heading=f"Threat-intel feed is failing: {source.name}",
+        render_context={
+            "feed_name": source.name,
+            "last_success": _last_success_at.get(str(source.id)),
+            "error_class": (source.last_error or "unknown error")[:200],
+        },
+        dedupe_key=lambda r, sid=source.id, d=today: f"E17:{sid}:{d}",
+        related_type="ioc_source", related_id=str(source.id),
+        why_you_got_this="you are an administrator and a configured threat-intel feed is failing.",
+    )
+    await db.commit()
 
 
 class FeedFetchError(Exception):
@@ -212,6 +244,9 @@ async def refresh_source(db: AsyncSession, source: IocSource, redis: aioredis.Re
         await db.commit()
         await rebuild_index(db, redis or get_redis())
 
+        _consecutive_failures.pop(str(source.id), None)
+        _last_success_at[str(source.id)] = now.isoformat()
+
         logger.info("feed %s refreshed: %d accepted, %d rejected", source.name, accepted, rejected)
         return {"accepted": accepted, "rejected": rejected}
 
@@ -222,4 +257,10 @@ async def refresh_source(db: AsyncSession, source: IocSource, redis: aioredis.Re
         source.last_fetch_at = now
         await db.commit()
         logger.error("feed %s refresh failed: %s", source.name, exc)
+
+        fail_count = _consecutive_failures.get(str(source.id), 0) + 1
+        _consecutive_failures[str(source.id)] = fail_count
+        if fail_count >= FEED_FAIL_ALERT_THRESHOLD:
+            await _notify_feed_failing(db, source)
+
         return {"accepted": 0, "rejected": 0, "error": str(exc)}

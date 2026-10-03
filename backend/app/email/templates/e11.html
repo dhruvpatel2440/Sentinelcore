@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Your scheduled report is ready.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">Type</td><td>{{ report_type }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Window</td><td>{{ window }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Format</td><td>{{ format }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Generated</td><td>{{ generated_at }}</td></tr>
+</table>
+{% if attached %}
+<p>The report is attached to this email.</p>
+{% else %}
+<p>The report exceeded the attachment size limit — use the button below to download it (sign-in required).</p>
+{% endif %}
+{% endblock %}

@@ -78,6 +78,9 @@ class Client:
     def patch(self, path, **kw):
         return self.http.patch(path, headers=self._h(), **kw)
 
+    def put(self, path, **kw):
+        return self.http.put(path, headers=self._h(), **kw)
+
     def delete(self, path, **kw):
         return self.http.request("DELETE", path, headers=self._h(), **kw)
 
@@ -806,6 +809,76 @@ def test_m12_intel(admin: Client, analyst: Client, viewer: Client) -> None:
 
 
 # ===========================================================================
+# U10 -- Email notifications
+# ===========================================================================
+def test_u10_email(admin: Client, analyst: Client, viewer: Client) -> None:
+    """Exercises the dry-run outbox end to end: no real send happens, but
+    `enqueue()` must still run its full pipeline and leave rows the admin
+    outbox API can see. Assumes the stack is running with EMAIL_MODE=dry_run
+    per the rollout order in docs/email.md -- skips cleanly if not."""
+    print("\n== U10: Email Notifications ==")
+
+    r = admin.get("/email/status")
+    record("U10", "admin can read email status", r.status_code == 200, r.text[:200])
+    if r.status_code != 200:
+        return
+    status_body = r.json()
+    check("U10", "viewer BLOCKED from email status", viewer.get("/email/status").status_code, 403, "critical")
+    record("U10", "email status never exposes the API key itself (boolean only)",
+           "api_key_present" in status_body and isinstance(status_body["api_key_present"], bool),
+           str(status_body.get("api_key_present")), "critical")
+
+    if status_body.get("mode") != "dry_run":
+        record("U10", "stack is running with EMAIL_MODE=dry_run for this e2e pass",
+               False, f"mode={status_body.get('mode')!r} -- skipping outbox assertions")
+        return
+
+    # E07: a firewall block (admin-only, always synchronous) must produce an
+    # outbox row quickly enough for this script to observe it.
+    blk = {"target": "203.0.113.205/32", "direction": "inbound", "ttl_seconds": 300, "reason": "e2e U10 block"}
+    r = admin.post("/firewall/actions", json=blk)
+    action_id = r.json().get("id") if r.status_code == 201 else None
+    record("U10", "firewall block created for E07 check", r.status_code == 201, r.text[:150])
+    if action_id:
+        r2 = admin.get("/email/outbox?email_type=E07&limit=20&include_body=true")
+        rows = r2.json().get("items", []) if r2.status_code == 200 else []
+        hit = next((row for row in rows if row.get("related_id") == action_id), None)
+        record("U10", "E07 outbox row exists for the block just applied", hit is not None, f"rows_seen={len(rows)}")
+        if hit:
+            record("U10", "E07 body is HTML-escaped (no literal <script>)",
+                   "<script>" not in hit.get("html_body", ""), "", "critical")
+        admin.delete(f"/firewall/actions/{action_id}")
+
+    # E19: creating a user must enqueue a "set your password" email, never
+    # the admin-chosen password itself.
+    new_username = f"e2e-u10-{uuid.uuid4().hex[:8]}"
+    new_email = f"{new_username}@example.com"
+    admin_chosen_password = "AdminChosenPassw0rd!"
+    r = admin.post("/users", json={"username": new_username, "email": new_email,
+                                    "password": admin_chosen_password, "role": "viewer"})
+    created_user_id = r.json().get("id") if r.status_code == 201 else None
+    record("U10", "user created for E19 check", r.status_code == 201, r.text[:150])
+    if created_user_id:
+        r2 = admin.get("/email/outbox?email_type=E19&limit=20&include_body=true")
+        rows = r2.json().get("items", []) if r2.status_code == 200 else []
+        hit = next((row for row in rows if row.get("recipient_email") == new_email), None)
+        record("U10", "E19 outbox row exists for the new user", hit is not None, f"rows_seen={len(rows)}")
+        if hit:
+            record("U10", "E19 body never contains the admin-chosen password",
+                   admin_chosen_password not in hit.get("html_body", "") and admin_chosen_password not in hit.get("text_body", ""),
+                   "", "critical")
+        admin.delete(f"/users/{created_user_id}")
+
+    r = analyst.get("/me/email-preferences")
+    record("U10", "any authenticated role can read its own email preferences", r.status_code == 200, r.text[:150])
+    r = analyst.put("/me/email-preferences", json={"types_disabled": ["E19", "E15"]})
+    if r.status_code == 200:
+        record("U10", "locked types (E15/E19) cannot be opted out of client-side",
+               "E15" not in r.json().get("types_disabled", []) and "E19" not in r.json().get("types_disabled", []),
+               str(r.json().get("types_disabled")), "critical")
+
+
+# ===========================================================================
 # Frontend routes
 # ===========================================================================
 def test_frontend() -> None:
@@ -876,6 +949,21 @@ def test_invariants() -> None:
     except Exception:
         out = ""
     record("Invariant", ".env is not tracked by git", out == "", f"git ls-files .env -> {out!r}")
+
+    # U10: the Brevo key must never leak into a tracked file or an API response.
+    if settings.brevo_api_key:
+        hits = []
+        for root in (Path("/app"),):
+            if not root.exists():
+                continue
+            for py in root.rglob("*.py"):
+                try:
+                    if settings.brevo_api_key in py.read_text(errors="ignore"):
+                        hits.append(str(py))
+                except Exception:
+                    continue
+        record("Invariant", "BREVO_API_KEY does not appear hardcoded in any tracked .py file",
+               not hits, f"found in {hits[:5]}", "critical")
 
     # The API holds no raw network capability; root work goes via the helper socket.
     sock = Path(settings.helper_socket_path)
@@ -951,6 +1039,7 @@ def main() -> int:
         (test_m10_firewall, (admin, analyst, viewer)),
         (test_m11_pcap, (admin, analyst, viewer)),
         (test_m12_intel, (admin, analyst, viewer)),
+        (test_u10_email, (admin, analyst, viewer)),
         (test_frontend, ()),
         (test_invariants, ()),
     ]:

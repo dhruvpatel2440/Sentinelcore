@@ -1,0 +1,4 @@
+{% extends "base.txt" %}
+{% block content %}
+Your firewall block on {{ target }} expires at {{ expires_at }} - in under 10 minutes.
+{% endblock %}

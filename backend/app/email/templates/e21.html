@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<p>A login to your account was recorded.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">Time</td><td>{{ time }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">IP</td><td>{{ ip_defanged }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Outcome</td><td>{{ outcome }}</td></tr>
+</table>
+<p>If this was not you, use the button below to reset your password immediately.</p>
+{% endblock %}

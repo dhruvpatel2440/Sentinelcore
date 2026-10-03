@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Firewall block on <strong>{{ target }}</strong> is now <strong>{{ reason }}</strong>{% if revoked_by %}, by {{ revoked_by }}{% endif %}.</p>
+{% if removal_failed %}<p style="color:#b91c1c; font-weight:bold;">The rule could not be removed from the kernel. Manual verification is required.</p>{% endif %}
+{% endblock %}

@@ -19,6 +19,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
+from app.email import recipients as email_recipients
+from app.email.render import app_link
+from app.email.service import enqueue, resolve_recipients_from_users
+from app.email.types import EmailType
+from app.models.event import Severity
 from app.models.firewall_action import (
     ACTIVE_STATUSES,
     TTL_MAX_SECONDS,
@@ -122,6 +127,7 @@ async def apply(
             request=request,
         )
         await db.commit()
+        await _notify_block_refused(db, requester=user, target=payload.target, reason=exc.message)
         raise FirewallGuardRejected(exc.message) from exc
     except HelperError as exc:
         action.status = FirewallActionStatus.FAILED
@@ -152,6 +158,7 @@ async def apply(
     )
     await db.commit()
     await db.refresh(action)
+    await _notify_block_applied(db, action, requester=user)
     return action
 
 
@@ -189,6 +196,7 @@ async def revoke(
     )
     await db.commit()
     await db.refresh(action)
+    await _notify_block_ended(db, action, reason="revoked", revoked_by=user.username)
     return action
 
 
@@ -214,6 +222,108 @@ async def extend(
     await db.commit()
     await db.refresh(action)
     return action
+
+
+# ---------------------------------------------------------------------------
+# E07 / E09 / E10 — containment email hooks (U10). Admins get applied/
+# expired/revoked notices; the requester gets the refusal notice.
+# ---------------------------------------------------------------------------
+
+
+async def _notify_block_applied(db: AsyncSession, action: FirewallAction, *, requester: User) -> None:
+    admin_users = await email_recipients.admins(db)
+    recips = await resolve_recipients_from_users(db, admin_users)
+    if not recips:
+        return
+    expires_local = action.expires_at.astimezone()
+    await enqueue(
+        db,
+        email_type=EmailType.E07_BLOCK_APPLIED,
+        recipients=recips,
+        heading=f"Firewall block applied to {action.target}",
+        render_context={
+            "target": str(action.target),
+            "direction": action.direction.value,
+            "protocol": action.protocol,
+            "port": action.port,
+            "ttl_seconds": action.ttl_seconds,
+            "expires_at_utc": action.expires_at.strftime("%Y-%m-%d %H:%M UTC"),
+            "expires_at_local": expires_local.strftime("%Y-%m-%d %H:%M %Z"),
+            "requester": requester.username,
+            "incident_number": None,
+        },
+        dedupe_key=lambda r, a=action: f"E07:{a.id}",
+        related_type="firewall_action", related_id=str(action.id),
+        button_label="View / revoke", button_url=app_link(f"/firewall/{action.id}"),
+        why_you_got_this="you are an administrator and a containment action was applied.",
+    )
+    await db.commit()
+
+
+async def _notify_block_refused(db: AsyncSession, *, requester: User, target: str, reason: str) -> None:
+    admin_users = await email_recipients.admins(db)
+    recips = await resolve_recipients_from_users(db, admin_users)
+    if not recips:
+        return
+    hour_bucket = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    await enqueue(
+        db,
+        email_type=EmailType.E10_BLOCK_REFUSED,
+        recipients=recips,
+        heading=f"Firewall block refused: {target}",
+        render_context={"requester": requester.username, "target": target, "reason": reason},
+        dedupe_key=lambda r, req=requester.id, tgt=target, hb=hour_bucket: f"E10:{req}:{tgt}:{hb.isoformat()}",
+        related_type="firewall_action", related_id=target,
+        why_you_got_this="you are an administrator and a containment request was refused by a protection guard.",
+    )
+    await db.commit()
+
+
+async def _notify_block_ended(
+    db: AsyncSession, action: FirewallAction, *, reason: str, revoked_by: str | None = None, removal_failed: bool = False
+) -> None:
+    admin_users = await email_recipients.admins(db)
+    recips = await resolve_recipients_from_users(db, admin_users)
+    if not recips:
+        return
+    await enqueue(
+        db,
+        email_type=EmailType.E09_BLOCK_EXPIRED,
+        recipients=recips,
+        heading=f"Firewall block on {action.target} is now {reason}",
+        render_context={
+            "target": str(action.target), "reason": reason, "revoked_by": revoked_by, "removal_failed": removal_failed,
+        },
+        severity=Severity.HIGH if removal_failed else None,
+        dedupe_key=lambda r, a=action, rs=reason: f"E09:{a.id}:{rs}",
+        related_type="firewall_action", related_id=str(action.id),
+        button_label="View", button_url=app_link(f"/firewall/{action.id}"),
+        why_you_got_this="you are an administrator and a containment action changed state.",
+    )
+    await db.commit()
+
+
+async def _notify_drift(db: AsyncSession, *, missing: list[str], orphans: list[str]) -> None:
+    admin_users = await email_recipients.admins(db)
+    recips = await resolve_recipients_from_users(db, admin_users)
+    if not recips:
+        return
+    signature = ",".join(sorted(missing)) + "|" + ",".join(sorted(orphans))
+    hour_bucket = (datetime.now(timezone.utc).hour // 6) * 6
+    day = datetime.now(timezone.utc).date()
+    await enqueue(
+        db,
+        email_type=EmailType.E18_FIREWALL_DRIFT,
+        recipients=recips,
+        heading="Firewall kernel state drifted from the database",
+        render_context={"missing": missing, "extra": orphans},
+        severity=Severity.MEDIUM,
+        dedupe_key=lambda r, sig=signature, d=day, hb=hour_bucket: f"E18:{sig}:{d}:{hb}",
+        related_type="firewall_drift", related_id=str(day),
+        button_label="Open firewall status", button_url=app_link("/firewall"),
+        why_you_got_this="you are an administrator and the enforced firewall state no longer matches the database.",
+    )
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +355,7 @@ async def run_expiry_pass(db: AsyncSession) -> int:
                     db, action="firewall.expiry_stuck", username="system", resource_type="firewall_action",
                     resource_id=action.id, outcome="error", detail={"attempts": attempts, "error": str(exc)},
                 )
+                await _notify_block_ended(db, action, reason="failed_to_remove", removal_failed=True)
             continue
 
         action.status = FirewallActionStatus.EXPIRED
@@ -254,6 +365,7 @@ async def run_expiry_pass(db: AsyncSession) -> int:
             resource_id=action.id, detail={"target": str(action.target)},
         )
         logger.info("expired firewall action_id=%s target=%s", action.id, action.target)
+        await _notify_block_ended(db, action, reason="expired")
         expired += 1
 
     if due:
@@ -325,6 +437,7 @@ async def reconcile(db: AsyncSession, redis: aioredis.Redis | None = None) -> di
             db, action="firewall.reconciled", username="system", resource_type="firewall_action",
             detail={"missing": missing, "reapplied": reapplied, "orphans_removed": orphans},
         )
+        await _notify_drift(db, missing=missing, orphans=orphans)
 
     await db.commit()
 

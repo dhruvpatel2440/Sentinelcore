@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<p>A threat-intel indicator matched traffic involving a monitored asset.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">Indicator</td><td>{{ ioc_type }}: {{ ioc_value_defanged }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Feed</td><td>{{ feed_name }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Confidence</td><td>{{ confidence }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">First seen</td><td>{{ first_seen }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Last seen</td><td>{{ last_seen }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Matched asset</td><td>{{ asset }}</td></tr>
+</table>
+{% endblock %}

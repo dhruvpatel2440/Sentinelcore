@@ -1,0 +1,6 @@
+{% extends "base.txt" %}
+{% block content %}
+Threat-intel feed {{ feed_name }} is failing to refresh.
+Last success: {{ last_success or "never" }}
+Error: {{ error_class }}
+{% endblock %}
