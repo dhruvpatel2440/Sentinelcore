@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Incident #{{ incident_number }} has been {{ status }} for {{ age_minutes }} minute(s) &mdash; past its SLA ({{ stage }}).</p>
+{% endblock %}

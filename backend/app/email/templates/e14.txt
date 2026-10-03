@@ -1,0 +1,13 @@
+{% extends "base.txt" %}
+{% block content %}
+Summary for {{ period_start }} to {{ period_end }}.
+New incidents: {% for sev, count in new_incidents_by_severity.items() %}{{ sev }}: {{ count }} {% endfor %}{% if not new_incidents_by_severity %}none{% endif %}
+Overdue (past SLA): {{ overdue_incidents | length }}
+Containment actions: {{ containment_count }}
+Threat-intel hits: {{ ioc_hit_count }}
+{% if overdue_incidents %}
+Overdue incidents:
+{% for i in overdue_incidents %}- #{{ i.number }} ({{ i.severity }})
+{% endfor %}
+{% endif %}
+{% endblock %}

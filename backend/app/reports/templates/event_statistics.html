@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+{% if data.sensor_drop_rate is not none and data.sensor_drop_rate > 1 %}
+<p class="warn">Sensor packet drop rate: {{ "%.2f"|format(data.sensor_drop_rate) }}% — this report may under-represent actual traffic.</p>
+{% elif data.sensor_drop_rate is not none %}
+<p class="muted">Sensor packet drop rate: {{ "%.2f"|format(data.sensor_drop_rate) }}%</p>
+{% endif %}
+
+<h2>Summary</h2>
+<div class="stat-grid">
+  <div class="stat"><div class="label">Total events</div><div class="value">{{ data.total_events }}</div></div>
+</div>
+
+<h2>By severity</h2>
+<img class="chart" src="{{ severity_chart }}" alt="Events by severity">
+
+<h2>Volume over time</h2>
+<img class="chart" src="{{ volume_chart }}" alt="Event volume over time">
+
+<h2>Top signatures</h2>
+<table>
+  <tr><th>Signature</th><th>Count</th><th>Previous period</th><th>Trend</th></tr>
+  {% for s in data.top_signatures %}
+  <tr>
+    <td>{{ s.signature }}</td><td>{{ s.count }}</td><td>{{ s.previous_count }}</td>
+    <td>{% if s.count > s.previous_count %}&uarr;{% elif s.count < s.previous_count %}&darr;{% else %}&mdash;{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Protocol distribution</h2>
+<table>
+  <tr><th>Protocol</th><th>Count</th></tr>
+  {% for k, v in data.protocol_counts.items() %}
+  <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Busiest sources</h2>
+<table>
+  <tr><th>Source IP</th><th>Count</th></tr>
+  {% for s in data.top_src_ips %}
+  <tr><td>{{ s.ip }}</td><td>{{ s.count }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Busiest destinations</h2>
+<table>
+  <tr><th>Destination IP</th><th>Count</th></tr>
+  {% for s in data.top_dst_ips %}
+  <tr><td>{{ s.ip }}</td><td>{{ s.count }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

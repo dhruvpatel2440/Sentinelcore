@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<p>The firewall kernel state no longer matches the database.</p>
+{% if missing %}<p style="color:#64748b;">Missing from kernel (re-applying): {{ missing | join(", ") }}</p>{% endif %}
+{% if extra %}<p style="color:#64748b;">Orphans removed from kernel: {{ extra | join(", ") }}</p>{% endif %}
+{% endblock %}

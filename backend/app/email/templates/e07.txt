@@ -1,0 +1,9 @@
+{% extends "base.txt" %}
+{% block content %}
+A firewall block was applied.
+Target: {{ target }}
+Direction / protocol / port: {{ direction }} / {{ protocol or "any" }} / {{ port or "any" }}
+TTL: {{ ttl_seconds }}s, expires {{ expires_at_utc }} UTC ({{ expires_at_local }} lab local)
+Requested by: {{ requester }}
+{% if incident_number %}Linked incident: #{{ incident_number }}{% endif %}
+{% endblock %}

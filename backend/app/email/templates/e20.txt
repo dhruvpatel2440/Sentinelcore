@@ -1,0 +1,5 @@
+{% extends "base.txt" %}
+{% block content %}
+{{ what_changed }}
+By {{ changed_by }} at {{ changed_at }}.
+{% endblock %}

@@ -1,6 +1,16 @@
 from app.models.asset import Asset, AssetPort, PortState, Protocol
 from app.models.audit_log import AuditChainHead, AuditLog
 from app.models.correlation import CandidateStatus, CorrelationRule, IncidentCandidate, RuleRun, RuleType
+from app.models.email import (
+    EmailDeliveryMode,
+    EmailDigestFrequency,
+    EmailOutbox,
+    EmailOutboxStatus,
+    EmailPreferences,
+    EmailSettings,
+    EmailSuppression,
+    EmailSuppressionReason,
+)
 from app.models.event import Event, EventType, Severity
 from app.models.firewall_action import (
     ACTIVE_STATUSES,
@@ -18,6 +28,8 @@ from app.models.incident import (
     IncidentStatus,
     TERMINAL_STATUSES,
 )
+from app.models.login_event import LoginEvent
+from app.models.password_reset import PasswordResetToken
 from app.models.pcap import ArtifactType, PcapArtifact, PcapFile, PcapFlow, PcapStatus
 from app.models.report import Report, ReportFormat, ReportSchedule, ReportStatus, ReportType
 from app.models.saved_search import SavedSearch
@@ -41,6 +53,16 @@ __all__ = [
     "IncidentCandidate",
     "RuleRun",
     "RuleType",
+    "EmailDeliveryMode",
+    "EmailDigestFrequency",
+    "EmailOutbox",
+    "EmailOutboxStatus",
+    "EmailPreferences",
+    "EmailSettings",
+    "EmailSuppression",
+    "EmailSuppressionReason",
+    "LoginEvent",
+    "PasswordResetToken",
     "Event",
     "EventType",
     "Severity",

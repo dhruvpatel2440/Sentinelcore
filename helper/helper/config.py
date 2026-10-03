@@ -28,6 +28,24 @@ def _resolve_binary(name: str, explicit: str | None) -> str | None:
     return str(path)
 
 
+def _resolve_binary_no_symlink_follow(name: str, explicit: str | None) -> str | None:
+    """Like `_resolve_binary`, but keeps the discovered path as-is.
+
+    `iptables` on modern Debian is a symlink to the `xtables-nft-multi`
+    busybox-style binary, which dispatches behaviour from `argv[0]`'s
+    basename. Fully resolving the symlink (as `_resolve_binary` does for
+    ordinary binaries) would rewrite argv[0] to `xtables-nft-multi` and the
+    multicall binary would refuse to run with no subcommand.
+    """
+    candidate = explicit or shutil.which(name)
+    if not candidate:
+        return None
+    path = Path(candidate)
+    if not path.is_file() or not os.access(path, os.X_OK):
+        return None
+    return str(path)
+
+
 @dataclass
 class HelperConfig:
     socket_path: Path = field(
@@ -78,6 +96,26 @@ class HelperConfig:
     suricata_socket: Path = field(
         default_factory=lambda: Path(
             os.getenv("SURICATA_COMMAND_SOCKET", "/var/run/suricata/suricata-command.socket")
+        )
+    )
+
+    # M10 — firewall containment
+    ip_path: str | None = field(default_factory=lambda: _resolve_binary("ip", os.getenv("IP_PATH")))
+    iptables_path: str | None = field(
+        default_factory=lambda: _resolve_binary_no_symlink_follow("iptables", os.getenv("IPTABLES_PATH"))
+    )
+    fw_chain: str = os.getenv("FIREWALL_CHAIN", "SENTINELCORE")
+    fw_op_timeout_seconds: int = int(os.getenv("HELPER_FIREWALL_TIMEOUT", "15"))
+    # Never trusted alone — is_protected() also checks the live routing table
+    # and /etc/resolv.conf, so a stale env value cannot widen what is blockable.
+    protected_ips: frozenset[str] = field(
+        default_factory=lambda: frozenset(
+            ip.strip() for ip in os.getenv("PROTECTED_IPS", "").split(",") if ip.strip()
+        )
+    )
+    dns_override: frozenset[str] = field(
+        default_factory=lambda: frozenset(
+            ip.strip() for ip in os.getenv("DNS_SERVERS", "").split(",") if ip.strip()
         )
     )
 

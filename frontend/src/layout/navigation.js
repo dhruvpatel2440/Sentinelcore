@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   FileSearch,
+  GitMerge,
   LayoutDashboard,
   Radar,
   ServerCog,
@@ -27,6 +28,7 @@ export const NAV_GROUPS = [
     label: "Detect",
     items: [
       { to: "/events", label: "Events", icon: Activity, roles: null },
+      { to: "/correlation", label: "Correlation", icon: GitMerge, roles: null },
       { to: "/incidents", label: "Incidents", icon: ShieldAlert, roles: null },
       { to: "/intel", label: "Threat Intel", icon: Target, roles: null },
     ],

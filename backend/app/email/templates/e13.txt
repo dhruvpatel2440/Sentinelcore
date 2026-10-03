@@ -1,0 +1,7 @@
+{% extends "base.txt" %}
+{% block content %}
+A report failed to generate.
+Type: {{ report_type }}
+Window: {{ window }}
+Error: {{ error_class }}
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.txt" %}
+{% block content %}
+Hi {{ display_name }},
+{% if purpose == "set_password" %}
+An administrator created a SentinelCore account for you. Use the link below to set your password.
+{% else %}
+We received a request to reset the password for this account.
+{% endif %}
+This link expires in {{ expiry_minutes }} minutes.
+If you did not request this, you can safely ignore this email.
+{% endblock %}

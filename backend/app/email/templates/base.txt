@@ -1,0 +1,11 @@
+SentinelCore{% if severity %} [{{ severity | upper }}]{% endif %}
+{{ heading }}
+
+{% block content %}{% endblock %}
+{% if button_label and button_url %}
+{{ button_label }}: {{ button_url }}
+{% endif %}
+
+--
+You received this because {{ why_you_got_this | default('you are subscribed to SentinelCore alerts.') }}
+Manage notification preferences: {{ prefs_url }}

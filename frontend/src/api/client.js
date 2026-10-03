@@ -125,6 +125,102 @@ async function request(path, options = {}) {
   return contentType.includes("application/json") ? res.json() : res.text();
 }
 
+/**
+ * Streams an authenticated file download (reports, pcap, …) as a blob rather
+ * than JSON. Shares the token/refresh logic with `request()` because a
+ * download hitting a stale access token should retry exactly like any other
+ * call, not surface a raw 401 to the user.
+ */
+export async function downloadFile(path) {
+  const attempt = () => {
+    const token = getToken();
+    return fetch(`${BASE}${path}`, {
+      credentials: "include",
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+  };
+
+  let res = await attempt();
+  if (res.status === 401) {
+    try {
+      await refreshAccessToken();
+      res = await attempt();
+    } catch {
+      onAuthLost();
+      throw new ApiError(401, "Your session has expired. Please sign in again.", null);
+    }
+  }
+  if (!res.ok) throw await parseError(res);
+
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  return { blob: await res.blob(), filename: match?.[1] || "download" };
+}
+
+/**
+ * Uploads a file with real progress reporting (M11 PCAP upload). Needs XHR
+ * rather than `fetch` because `fetch` has no upload-progress event. Shares
+ * the same single-retry-on-401 behavior as `request()`.
+ */
+export function uploadFile(path, file, { onProgress, signal } = {}) {
+  const attempt = () =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${BASE}${path}`);
+      xhr.withCredentials = true;
+      const token = getToken();
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.responseType = "json";
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) onProgress(Math.round((evt.loaded / evt.total) * 100));
+        };
+      }
+
+      xhr.onload = () => resolve(xhr);
+      xhr.onerror = () => reject(new ApiError(0, "Network error during upload", null));
+      xhr.onabort = () => reject(new ApiError(0, "Upload cancelled", null));
+
+      if (signal) {
+        signal.addEventListener("abort", () => xhr.abort(), { once: true });
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+      xhr.send(form);
+    });
+
+  return (async () => {
+    let xhr = await attempt();
+    if (xhr.status === 401) {
+      await refreshAccessToken().catch(() => {
+        onAuthLost();
+        throw new ApiError(401, "Your session has expired. Please sign in again.", null);
+      });
+      xhr = await attempt();
+    }
+    if (xhr.status < 200 || xhr.status >= 300) {
+      const body = xhr.response;
+      const detail = body?.detail ?? body;
+      const message = typeof detail === "string" ? detail : xhr.statusText || `Upload failed (${xhr.status})`;
+      throw new ApiError(xhr.status, message, detail);
+    }
+    return xhr.response;
+  })();
+}
+
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: (path, options) => request(path, { ...options, method: "GET" }),
   post: (path, body, options) => request(path, { ...options, method: "POST", body }),

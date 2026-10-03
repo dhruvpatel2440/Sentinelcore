@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Threat-intel feed <strong>{{ feed_name }}</strong> is failing to refresh.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">Last success</td><td>{{ last_success or "never" }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Error</td><td>{{ error_class }}</td></tr>
+</table>
+{% endblock %}

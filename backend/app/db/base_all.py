@@ -8,10 +8,13 @@ from app.db.base import Base  # noqa: F401
 from app.models.asset import Asset, AssetPort  # noqa: F401
 from app.models.audit_log import AuditChainHead, AuditLog  # noqa: F401
 from app.models.correlation import CorrelationRule, IncidentCandidate, RuleRun  # noqa: F401
+from app.models.email import EmailOutbox, EmailPreferences, EmailSettings, EmailSuppression  # noqa: F401
 from app.models.event import Event  # noqa: F401
 from app.models.firewall_action import FirewallAction  # noqa: F401
 from app.models.incident import Incident, IncidentEvent, IncidentHistory  # noqa: F401
 from app.models.ioc import Ioc, IocMatch, IocSource  # noqa: F401
+from app.models.login_event import LoginEvent  # noqa: F401
+from app.models.password_reset import PasswordResetToken  # noqa: F401
 from app.models.pcap import PcapArtifact, PcapFile, PcapFlow  # noqa: F401
 from app.models.report import Report, ReportSchedule  # noqa: F401
 from app.models.saved_search import SavedSearch  # noqa: F401

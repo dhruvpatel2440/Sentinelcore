@@ -1,6 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -109,6 +109,12 @@ export default function LoginPage() {
           <Button type="submit" loading={pending} className="w-full" size="md">
             {pending ? "Signing in…" : "Sign in"}
           </Button>
+
+          <p className="text-center text-xs text-slate-500">
+            <Link to="/forgot-password" className="text-sky-400 hover:text-sky-300">
+              Forgot password?
+            </Link>
+          </p>
         </form>
       </div>
     </div>

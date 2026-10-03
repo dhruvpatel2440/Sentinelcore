@@ -1,0 +1,6 @@
+{% extends "base.txt" %}
+{% block content %}
+The firewall kernel state no longer matches the database.
+{% if missing %}Missing from kernel (re-applying): {{ missing | join(", ") }}{% endif %}
+{% if extra %}Orphans removed from kernel: {{ extra | join(", ") }}{% endif %}
+{% endblock %}

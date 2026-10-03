@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<p>A firewall block requested by <strong>{{ requester }}</strong> against <strong>{{ target }}</strong> was refused.</p>
+<p style="color:#64748b;">Reason: {{ reason }}</p>
+{% endblock %}

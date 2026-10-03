@@ -1,0 +1,18 @@
+{% extends "base.txt" %}
+{% block content %}
+A new {{ severity }} severity incident was opened.
+
+Incident: #{{ incident_number }} - {{ title }}
+Status: {{ status }}
+First seen: {{ first_seen }}
+Last seen: {{ last_seen }}
+Source: {{ src_ip_defanged or "unknown" }}
+Target: {{ target or "unknown" }}
+Events linked: {{ event_count }}
+Correlation rule: {{ rule_name or "n/a" }}
+{% if signatures %}
+Top signatures:
+{% for s in signatures[:5] %}- {{ s }}
+{% endfor %}
+{% endif %}
+{% endblock %}

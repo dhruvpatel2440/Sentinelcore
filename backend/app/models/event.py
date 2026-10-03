@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -70,6 +71,7 @@ class Event(Base):
         Index("ix_events_signature_id_ts", "signature_id", "ts"),
         Index("ix_events_severity_ts", "severity", "ts"),
         Index("ix_events_flow_id", "flow_id"),
+        Index("ix_events_ioc_match_ts", "ioc_match", "ts"),
         {"postgresql_partition_by": "RANGE (ts)"},
     )
 
@@ -121,3 +123,12 @@ class Event(Base):
     # The full original record. During an investigation, the field you did not
     # model is always the one you need.
     raw: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    # M12 — stamped by the matcher during M5 enrichment. `ioc_severity` is the
+    # highest IOC severity seen; `severity` above is escalated to at least
+    # that value but never downgraded.
+    ioc_match: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ioc_severity: Mapped[Severity | None] = mapped_column(
+        Enum(Severity, name="event_severity", values_callable=lambda e: [m.value for m in e], create_type=False),
+        nullable=True,
+    )

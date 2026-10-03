@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Summary for {{ period_start }} to {{ period_end }}.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">New incidents</td><td>
+    {% for sev, count in new_incidents_by_severity.items() %}{{ sev }}: {{ count }}&nbsp; {% endfor %}
+    {% if not new_incidents_by_severity %}none{% endif %}
+  </td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Overdue (past SLA)</td><td>{{ overdue_incidents | length }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Containment actions</td><td>{{ containment_count }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Threat-intel hits</td><td>{{ ioc_hit_count }}</td></tr>
+</table>
+{% if overdue_incidents %}
+<p style="color:#64748b; margin-top:16px;">Overdue incidents:</p>
+<ul>{% for i in overdue_incidents %}<li>#{{ i.number }} ({{ i.severity }})</li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

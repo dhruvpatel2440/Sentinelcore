@@ -12,8 +12,9 @@ everywhere, and it costs no extra lookup since the user row is already loaded.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -31,9 +32,65 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
+from app.email import recipients as email_recipients
+from app.email.render import app_link, defang
+from app.email.service import Recipient, enqueue
+from app.email.types import EmailType
+from app.models.login_event import LoginEvent
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse, UserOut
 from app.services import audit, login_throttle
+
+NEW_DEVICE_WINDOW_DAYS = 30
+SUSPICIOUS_LOGIN_REALERT_HOURS = 6
+
+
+def _ua_hash(request: Request) -> str | None:
+    ua = request.headers.get("user-agent")
+    return hashlib.sha256(ua.encode()).hexdigest() if ua else None
+
+
+async def _is_new_device(db: AsyncSession, user_id: uuid.UUID, *, ip: str | None, ua_hash: str | None) -> bool:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=NEW_DEVICE_WINDOW_DAYS)
+    prior = (
+        await db.execute(
+            select(LoginEvent).where(
+                LoginEvent.user_id == user_id, LoginEvent.success.is_(True), LoginEvent.created_at >= cutoff
+            ).limit(50)
+        )
+    ).scalars().all()
+    if not prior:
+        return False  # no history yet (e.g. first login ever) — nothing to compare against
+    return not any(e.ip == ip or (ua_hash is not None and e.user_agent_hash == ua_hash) for e in prior)
+
+
+async def _send_suspicious_login_email(
+    db: AsyncSession, user: User, *, ip: str | None, outcome: str
+) -> None:
+    targets = [user]
+    if user.role.value == "admin":
+        targets = targets + await email_recipients.admins(db)
+    recips = [Recipient(email=u.email, user_id=u.id) for u in targets if u.email]
+    if not recips:
+        return
+    hour_bucket = (datetime.now(timezone.utc).hour // SUSPICIOUS_LOGIN_REALERT_HOURS) * SUSPICIOUS_LOGIN_REALERT_HOURS
+    today = datetime.now(timezone.utc).date()
+    await enqueue(
+        db,
+        email_type=EmailType.E21_SUSPICIOUS_LOGIN,
+        recipients=recips,
+        heading="Suspicious login activity on your account",
+        render_context={
+            "time": datetime.now(timezone.utc).isoformat(),
+            "ip_defanged": defang(ip) if ip else "unknown",
+            "outcome": outcome,
+        },
+        dedupe_key=lambda r, uid=user.id, d=today, hb=hour_bucket: f"E21:{uid}:{d}:{hb}",
+        related_type="user", related_id=str(user.id),
+        button_label="Reset password", button_url=app_link("/forgot-password"),
+        why_you_got_this="this is a security notice for your account and cannot be disabled.",
+    )
+    await db.commit()
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -101,6 +158,11 @@ async def login(
             request=request,
         )
         await db.commit()
+        locked_user = (
+            await db.execute(select(User).where(User.username == payload.username))
+        ).scalar_one_or_none()
+        if locked_user is not None and locked_user.is_active:
+            await _send_suspicious_login_email(db, locked_user, ip=ip, outcome="blocked (too many failed attempts)")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many failed attempts. Try again shortly.",
@@ -119,6 +181,8 @@ async def login(
 
     if user is None or not password_ok or not user.is_active:
         await login_throttle.record_failure(payload.username, ip)
+        if user is not None:
+            db.add(LoginEvent(user_id=user.id, ip=ip, user_agent_hash=_ua_hash(request), success=False))
         await audit.record(
             db,
             action="auth.login",
@@ -142,6 +206,10 @@ async def login(
     await login_throttle.clear(payload.username, ip)
     user.last_login_at = datetime.now(timezone.utc)
 
+    ua_hash = _ua_hash(request)
+    is_new_device = await _is_new_device(db, user.id, ip=ip, ua_hash=ua_hash)
+    db.add(LoginEvent(user_id=user.id, ip=ip, user_agent_hash=ua_hash, success=True))
+
     session_id = str(uuid.uuid4())
     _set_refresh_cookie(response, create_refresh_token(user.id, session_id))
 
@@ -155,6 +223,9 @@ async def login(
     )
     await db.commit()
     await db.refresh(user)
+
+    if is_new_device:
+        await _send_suspicious_login_email(db, user, ip=ip, outcome="success (new device/IP)")
 
     return _token_response(user)
 

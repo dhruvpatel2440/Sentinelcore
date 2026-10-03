@@ -1,0 +1,5 @@
+{% extends "base.txt" %}
+{% block content %}
+The event pipeline backlog is above threshold.
+Backlog size: {{ backlog_size }}
+{% endblock %}

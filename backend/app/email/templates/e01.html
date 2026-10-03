@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<p>A new {{ severity }} severity incident was opened.</p>
+<table role="presentation" width="100%" style="font-size:13px; border-collapse:collapse;">
+  <tr><td style="color:#64748b; padding:4px 0;">Incident</td><td><strong>#{{ incident_number }} &mdash; {{ title }}</strong></td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Status</td><td>{{ status }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">First seen</td><td>{{ first_seen }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Last seen</td><td>{{ last_seen }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Source</td><td>{{ src_ip_defanged or "unknown" }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Target</td><td>{{ target or "unknown" }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Events linked</td><td>{{ event_count }}</td></tr>
+  <tr><td style="color:#64748b; padding:4px 0;">Correlation rule</td><td>{{ rule_name or "n/a" }}</td></tr>
+</table>
+{% if signatures %}
+<p style="color:#64748b; margin-top:16px;">Top signatures:</p>
+<ul>
+{% for s in signatures[:5] %}<li>{{ s }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}
