@@ -37,6 +37,51 @@ class Settings(BaseSettings):
     # Pipeline
     event_retention_days: int = 90
 
+    # M6 — event search
+    max_search_window_days: int = 30
+    search_facet_cache_seconds: int = 30
+
+    # M7 — correlation engine
+    correlation_interval_seconds: int = 30
+    correlation_lookback_grace_seconds: int = 60
+    correlation_rule_timeout_seconds: int = 60
+    correlation_max_concurrent_rules: int = 4
+    correlation_candidates_channel: str = "correlation:candidates"
+
+    # M8 — incident promotion
+    auto_promote_score: int = 70  # roughly the "high"/"critical" band
+    incident_merge_window_minutes: int = 60
+
+    # M9 — reporting
+    report_storage_path: str = "/var/lib/sentinelcore/reports"
+    max_report_window_days: int = 365
+    max_concurrent_reports_per_user: int = 3
+    report_retention_days: int = 30
+    report_generation_timeout_seconds: int = 600
+    report_queue_key: str = "reports:queue"
+
+    # M10 — firewall containment
+    max_active_blocks: int = 100
+    firewall_expiry_interval_seconds: int = 15
+    firewall_reconcile_interval_seconds: int = 300
+    firewall_expiry_alert_after_attempts: int = 5
+
+    # M11 — PCAP analysis
+    pcap_storage_path: str = "/var/lib/sentinelcore/pcap"
+    max_pcap_size_mb: int = 500
+    pcap_parse_timeout_seconds: int = 300
+    max_flows_per_pcap: int = 50_000
+    pcap_retention_days: int = 30
+    pcap_queue_key: str = "pcap:queue"
+    pcap_upload_chunk_bytes: int = 1024 * 1024
+
+    # M12 — threat intelligence
+    intel_feed_max_response_mb: int = 50
+    intel_feed_timeout_seconds: int = 30
+    intel_feed_row_cap: int = 200_000
+    intel_feed_scheduler_interval_seconds: int = 300
+    intel_expiry_interval_seconds: int = 3600
+
     # Deployment
     environment: str = "development"
 

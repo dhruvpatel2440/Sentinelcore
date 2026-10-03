@@ -12,6 +12,10 @@ volumes:
   suricata_rules:
   suricata_logs:
   suricata_run:
+  # Generated report files (M9) — a volume, never the image, per the spec.
+  report_storage:
+  # Uploaded captures (M11) — a volume, never the image; large and untrusted.
+  pcap_storage:
 
 services:
   db:
@@ -101,6 +105,8 @@ services:
       - helper_socket:/run/sentinelcore
       - rule_staging:/var/lib/sentinelcore/staging
       - suricata_logs:/var/log/suricata:ro
+      - report_storage:/var/lib/sentinelcore/reports
+      - pcap_storage:/var/lib/sentinelcore/pcap
     # CLAUDE.md: the API runs unprivileged. It gets NO network capabilities —
     # nmap/ARP work is delegated to `helper` over the socket above.
     cap_drop:
@@ -131,12 +137,20 @@ services:
       # Only the API runs migrations; two concurrent `alembic upgrade head`
       # processes race on the same schema.
       RUN_MIGRATIONS: "false"
+      HELPER_SOCKET_PATH: /run/sentinelcore/helper.sock
     command: ["python", "-m", "app.pipeline.worker"]
     volumes:
       - ./backend:/app
       # READ-ONLY: the pipeline reads the sensor's output and must never be
       # able to alter or truncate it.
       - suricata_logs:/var/log/suricata:ro
+      - report_storage:/var/lib/sentinelcore/reports
+      # M11 — the parser reads uploaded captures and the retention job
+      # deletes expired ones.
+      - pcap_storage:/var/lib/sentinelcore/pcap
+      # M10 — the expiry and reconciliation loops call the privileged helper
+      # to revoke/re-apply firewall rules, same socket the API uses.
+      - helper_socket:/run/sentinelcore
     cap_drop:
       - ALL
     security_opt:

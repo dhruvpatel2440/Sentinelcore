@@ -12,23 +12,28 @@ from app.api.routes import (
     audit,
     auth,
     correlation,
+    email_admin,
+    email_prefs,
     events,
     firewall,
     health,
     incidents,
     intel,
     pcap,
+    password_reset,
     pipeline,
     reports,
     sensor,
     stats,
     users,
+    webhooks,
 )
 
 api_router = APIRouter(prefix="/api")
 
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(password_reset.router)
 api_router.include_router(users.router)
 api_router.include_router(audit.router)
 api_router.include_router(assets.router)
@@ -42,3 +47,6 @@ api_router.include_router(reports.router)
 api_router.include_router(firewall.router)
 api_router.include_router(pcap.router)
 api_router.include_router(intel.router)
+api_router.include_router(email_admin.router)
+api_router.include_router(email_prefs.router)
+api_router.include_router(webhooks.router)

@@ -49,7 +49,14 @@ def _encode(subject: str, token_type: TokenType, expires_delta: timedelta, **ext
     payload: dict[str, Any] = {
         "sub": subject,
         "type": token_type,
-        "iat": int(now.timestamp()),
+        # `iat` keeps SUB-SECOND precision on purpose. Revocation compares this
+        # against `users.tokens_valid_from` (a microsecond-precision timestamp)
+        # in `deps.get_current_user`. Truncating to whole seconds made a token
+        # minted just AFTER a logout/password-change compare as older than the
+        # cutoff, so logging straight back in within the same second failed with
+        # "Session has been revoked". RFC 7519 NumericDate explicitly allows a
+        # non-integer value.
+        "iat": now.timestamp(),
         "exp": int((now + expires_delta).timestamp()),
         "jti": str(uuid.uuid4()),
         **extra,

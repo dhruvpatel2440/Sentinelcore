@@ -36,10 +36,15 @@ export default {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "slide-in-right": {
+          from: { opacity: "0", transform: "translateX(16px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 120ms ease-out",
         "slide-up": "slide-up 160ms ease-out",
+        "slide-in-right": "slide-in-right 160ms ease-out",
       },
     },
   },

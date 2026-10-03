@@ -10,10 +10,13 @@ WORKDIR /opt/helper
 #   suricata  — M4 sensor; the helper owns its lifecycle directly, so there is
 #               exactly one privilege path rather than a second container.
 #   logrotate — eve.json rotation (M5's tailer handles both mechanisms)
+#   iptables  — M10 firewall containment; iproute2 (`ip`) also backs the M10
+#               protection guard's host-address enumeration.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         nmap \
         iproute2 \
+        iptables \
         libpcap0.8 \
         suricata \
         suricata-update \
