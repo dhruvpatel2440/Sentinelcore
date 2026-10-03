@@ -1,0 +1,39 @@
+name: Website CI
+
+on:
+  pull_request:
+    paths: ["website/**", "docs/supported-platforms.md"]
+  push:
+    branches: [main]
+    paths: ["website/**", "docs/supported-platforms.md"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install
+        working-directory: website
+        run: npm ci
+      - name: Unit tests (releases.json consistency rules)
+        working-directory: website
+        run: npm test
+      - name: Build (prebuild fails if releases.json claims more than exists)
+        working-directory: website
+        run: npm run build
+      - name: No external requests, no sourcemaps, size budget
+        working-directory: website
+        run: node scripts/check-dist.mjs
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Colour contrast audit
+        working-directory: website
+        run: python scripts/contrast.py

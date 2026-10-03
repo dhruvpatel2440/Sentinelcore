@@ -1,0 +1,334 @@
+name: Release
+
+# Push a tag vX.Y.Z (must equal the VERSION file) to build and publish a signed
+# release to the PUBLIC releases repo. Source stays in this private repo.
+# One-time setup: docs/releasing.md.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/sentinelcore
+  # Public repo that hosts downloads, e.g. "yourname/sentinelcore-releases".
+  RELEASES_REPO: ${{ vars.RELEASES_REPO || 'dhruvpatel2440/sentinelcore-releases' }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          file="$(tr -d '[:space:]' < VERSION)"
+          if [ "$tag" != "$file" ]; then
+            echo "::error::tag v$tag does not match VERSION ($file). Run scripts/release/bump_version.py."
+            exit 1
+          fi
+          python3 scripts/release/extract_changelog.py "$tag" CHANGELOG.md > /dev/null \
+            || { echo "::error::CHANGELOG.md has no section for $tag"; exit 1; }
+          [ -n "$RELEASES_REPO" ] || { echo "::error::repository variable RELEASES_REPO is not set"; exit 1; }
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: version
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: {POSTGRES_USER: sentinelcore, POSTGRES_PASSWORD: sentinelcore, POSTGRES_DB: sentinelcore}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sentinelcore -d sentinelcore"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef
+      DATABASE_URL: postgresql+asyncpg://sentinelcore:sentinelcore@localhost:5432/sentinelcore
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: System libs (WeasyPrint, argon2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential libpango-1.0-0 libpangocairo-1.0-0 \
+            libgdk-pixbuf-2.0-0 libcairo2 libffi-dev shared-mime-info fonts-dejavu-core
+      - name: Backend tests
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          alembic upgrade head
+          python -m pytest tests -q
+      - name: Helper tests
+        working-directory: helper
+        run: |
+          pip install -r requirements.txt
+          python -m pytest tests -q
+      - name: Installer and release-script tests
+        run: |
+          pip install pytest
+          python -m pytest installer/tests scripts/release -q
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  e2e:
+    # Brings the full dev stack up and runs the platform end-to-end suite.
+    # A failure here blocks the release.
+    runs-on: ubuntu-latest
+    needs: version
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create a throw-away .env
+        run: |
+          cp .env.example .env
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
+          sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(openssl rand -hex 32)|" .env
+          sed -i "s|^EMAIL_MODE=.*|EMAIL_MODE=off|" .env
+          sed -i "s|^CAPTURE_INTERFACE=.*|CAPTURE_INTERFACE=eth0|" .env
+          ip=$(ip -4 -o addr show eth0 | awk '{print $4}' | head -n1)
+          python3 - "$ip" <<'PY' >> .env
+          import ipaddress, sys
+          i = ipaddress.ip_interface(sys.argv[1])
+          print(f"MONITORED_NETWORK={i.network}")
+          print(f"PROTECTED_IPS={i.ip}")
+          PY
+      - name: Start the stack
+        run: docker compose up -d --build db redis helper backend worker
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+            docker compose exec -T backend python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health',timeout=3)" && exit 0
+            sleep 5
+          done
+          docker compose logs --tail 100
+          exit 1
+      - name: Fixtures and end-to-end suite
+        run: |
+          docker compose exec -T backend python -m scripts.e2e_fixtures
+          docker compose exec -T backend python -m scripts.e2e_test
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 200
+
+  images:
+    runs-on: ubuntu-latest
+    needs: [version, secrets-scan, unit-tests, e2e]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - {name: backend,  context: backend,  file: packaging/docker/Dockerfile.backend}
+          - {name: helper,   context: helper,   file: packaging/docker/Dockerfile.helper}
+          - {name: frontend, context: frontend, file: frontend/Dockerfile.prod}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:${{ needs.version.outputs.version }}
+          provenance: false
+          sbom: false
+      - name: Image contents (no .git, tests, .env, sourcemaps, prompts, secrets)
+        run: scripts/release/verify-image-contents.sh "${IMAGE_PREFIX}-${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+      - name: Vulnerability scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+      - name: SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+          upload-artifact: false
+      - name: Record digest
+        run: echo '${{ steps.build.outputs.digest }}' > digest-${{ matrix.name }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.name }}
+          path: |
+            digest-${{ matrix.name }}.txt
+            sbom-${{ matrix.name }}.spdx.json
+
+  package:
+    runs-on: ubuntu-latest
+    needs: [version, images]
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {path: artifacts, pattern: "image-*", merge-multiple: true}
+      - uses: docker/login-action@v3
+        with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+
+      - name: Pin base images and write images.json
+        run: |
+          set -euo pipefail
+          digest_of() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["digest"])'; }
+          mkdir -p dist
+          python3 scripts/release/make_images_manifest.py --version "$VERSION" --out dist/images.json \
+            --image DB_IMAGE    postgres:16-alpine     "$(digest_of postgres:16-alpine)" \
+            --image REDIS_IMAGE redis:7.4-alpine       "$(digest_of redis:7.4-alpine)" \
+            --image NGINX_IMAGE nginx:1.27-alpine      "$(digest_of nginx:1.27-alpine)" \
+            --image BACKEND_IMAGE  "$IMAGE_PREFIX-backend:$VERSION"  "$(cat artifacts/digest-backend.txt)" \
+            --image HELPER_IMAGE   "$IMAGE_PREFIX-helper:$VERSION"   "$(cat artifacts/digest-helper.txt)" \
+            --image FRONTEND_IMAGE "$IMAGE_PREFIX-frontend:$VERSION" "$(cat artifacts/digest-frontend.txt)"
+          cat dist/images.json
+
+      - name: Import the signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          [ -n "$GPG_PRIVATE_KEY" ] || { echo "::error::RELEASE_GPG_PRIVATE_KEY secret is missing"; exit 1; }
+          grep -q 'BEGIN PGP PUBLIC KEY BLOCK' packaging/release-key.asc \
+            || { echo "::error::packaging/release-key.asc is not a real public key"; exit 1; }
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          FPR="$(gpg --batch --with-colons --show-keys packaging/release-key.asc | awk -F: '$1=="fpr"{print $10; exit}')"
+          echo "KEY_FPR=$FPR" >> "$GITHUB_ENV"
+          # loopback pinentry so detached signing is non-interactive
+          mkdir -p ~/.gnupg && echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf && gpgconf --reload gpg-agent
+          echo "$GPG_PASSPHRASE" > "$RUNNER_TEMP/pass"
+          echo "GPG_PASS_FILE=$RUNNER_TEMP/pass" >> "$GITHUB_ENV"
+
+      - name: Build .deb, install.sh, offline bundle
+        env:
+          RELEASE: "1"
+          RELEASE_KEY: packaging/release-key.asc
+          IMAGES_JSON: dist/images.json
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends lintian
+          packaging/build-deb.sh "$VERSION" dist
+          sed "s|__RELEASE_KEY_FINGERPRINT__|$KEY_FPR|" packaging/install.sh > dist/install.sh
+          chmod 0755 dist/install.sh
+          cp packaging/release-key.asc dist/release-key.asc
+          # Offline bundle: pull the pinned images, archive, sign.
+          python3 - <<'PY' > refs.txt
+          import json
+          for var, spec in json.load(open("dist/images.json"))["images"].items():
+              print(spec["ref"] + "@" + spec["digest"], spec["ref"])
+          PY
+          while read -r pinned ref; do docker pull "$pinned" && docker tag "$pinned" "$ref"; done < refs.txt
+          # Offline bundle files are signed inside the bundle itself (install-offline.sh checks them).
+          GPG_KEY="$KEY_FPR" packaging/build-offline-bundle.sh "$VERSION" "dist/sentinelcore_${VERSION}_all.deb" dist/images.json dist
+          # The package the website's Download button serves: install.sh + installer + signed checksums.
+          GPG_KEY="$KEY_FPR" RELEASE_KEY=packaging/release-key.asc scripts/release/build-installer-package.sh "$VERSION" dist/images.json dist
+
+      - name: Collect SBOMs and write SHA256SUMS
+        run: |
+          set -euo pipefail
+          cp artifacts/sbom-*.spdx.json dist/
+          cd dist
+          sha256sum "sentinelcore_${VERSION}_all.deb" "sentinelcore-offline-${VERSION}.tar.gz" \
+                    "sentinelcore-installer-${VERSION}.tar.gz" \
+                    install.sh images.json release-key.asc sbom-*.spdx.json > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Write latest.json
+        run: |
+          set -euo pipefail
+          notes="$(python3 scripts/release/extract_changelog.py "$VERSION" CHANGELOG.md | head -c 1500 | tr '\n' ' ')"
+          python3 scripts/release/make_latest_json.py --version "$VERSION" --sums dist/SHA256SUMS \
+            --base-url "https://github.com/${RELEASES_REPO}/releases/download/v${VERSION}" \
+            --notes "$notes" --out dist/latest.json
+
+      - name: Sign SHA256SUMS, latest.json, install.sh
+        run: |
+          set -euo pipefail
+          for f in SHA256SUMS latest.json install.sh; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase-file "$GPG_PASS_FILE" \
+                --armor --detach-sign --local-user "$KEY_FPR" -o "dist/$f.asc" "dist/$f"
+            gpg --batch --verify "dist/$f.asc" "dist/$f"
+          done
+          shred -u "$GPG_PASS_FILE"
+
+      - name: Final check - no secrets or private files in dist
+        run: |
+          ! grep -rIl -E 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY' dist || { echo "private key material in dist"; exit 1; }
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with: {name: release-files, path: dist/*, retention-days: 14}
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [version, package]
+    environment: release   # add required reviewers on this environment for a manual approval gate
+    permissions:
+      contents: write        # push the website-update branch in THIS repo
+      pull-requests: write   # open the website PR (enable "Allow GitHub Actions to create pull requests")
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}   # fine-grained PAT: contents:write on the releases repo ONLY
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: release-files, path: dist}
+      - name: Publish to the public releases repo
+        run: |
+          set -euo pipefail
+          python3 scripts/release/extract_changelog.py "$VERSION" CHANGELOG.md > notes.md
+          gh release create "v$VERSION" dist/* \
+            --repo "$RELEASES_REPO" --title "SentinelCore $VERSION" --notes-file notes.md --latest
+          echo "Published https://github.com/$RELEASES_REPO/releases/tag/v$VERSION"
+      - name: Update the website's releases.json and open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}   # this repo only; the releases-repo token above is not used here
+        run: |
+          set -euo pipefail
+          python3 scripts/release/update_website_releases.py             --latest dist/latest.json --sums dist/SHA256SUMS --key-file dist/release-key.asc             --repo "$RELEASES_REPO" --out website/src/data/releases.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="website/release-v${VERSION}"
+          git checkout -b "$branch"
+          git add website/src/data/releases.json
+          git commit -m "website: publish download links for v${VERSION}"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch"             --title "website: download links for v${VERSION}"             --body "Generated from the signed v${VERSION} release (latest.json + SHA256SUMS). The website build verifies every URL, checksum and the key fingerprint are present."

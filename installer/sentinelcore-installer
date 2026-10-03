@@ -1,0 +1,14 @@
+#!/usr/bin/python3
+"""sentinelcore-installer: runs `sentinelcore install` with the given options."""
+import os
+import sys
+
+for candidate in ("/usr/lib/sentinelcore", os.path.dirname(os.path.abspath(__file__))):
+    if os.path.isdir(os.path.join(candidate, "sentinelcore_installer")):
+        sys.path.insert(0, candidate)
+        break
+
+from sentinelcore_installer.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main(["install", *sys.argv[1:]]))

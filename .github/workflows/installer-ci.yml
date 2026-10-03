@@ -1,0 +1,51 @@
+name: Installer CI
+
+on:
+  pull_request:
+    paths: ["installer/**", "packaging/**", "scripts/release/**", "frontend/Dockerfile.prod", "docs/supported-platforms.md"]
+  push:
+    branches: [main]
+    paths: ["installer/**", "packaging/**", "scripts/release/**", "frontend/Dockerfile.prod"]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install pytest
+      - name: Installer unit tests (validators, config generation, wizard flow)
+        run: python -m pytest installer/tests scripts/release -q
+      - name: No shell=True / os.system in the installer
+        run: |
+          if grep -rn -E "shell\s*=\s*True|os\.system\(" installer/sentinelcore_installer; then exit 1; fi
+
+  shell-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck lintian
+          shellcheck packaging/*.sh scripts/release/*.sh
+      - name: Build the .deb and lint it
+        run: |
+          packaging/build-deb.sh 0.0.0 dist
+          lintian --no-tag-display-limit dist/*.deb || true
+          dpkg-deb -c dist/*.deb | grep -E 'usr/bin/sentinelcore|docker-compose.release.yml'
+      - name: Release compose file is valid
+        run: |
+          sudo mkdir -p /etc/sentinelcore && sudo touch /etc/sentinelcore/sentinelcore.env
+          POSTGRES_USER=x POSTGRES_PASSWORD=x POSTGRES_DB=x             docker compose --env-file packaging/release.env.template -f packaging/docker-compose.release.yml config -q
+      - name: Installer package layout smoke test (throw-away key, fake non-placeholder images.json)
+        run: scripts/release/test_installer_package.sh
+      - name: Production images build
+        run: |
+          docker build -f frontend/Dockerfile.prod frontend -t sc-frontend:ci
+          docker build -f packaging/docker/Dockerfile.backend backend -t sc-backend:ci
+          scripts/release/verify-image-contents.sh sc-frontend:ci
+          scripts/release/verify-image-contents.sh sc-backend:ci

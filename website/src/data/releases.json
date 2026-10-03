@@ -1,0 +1,53 @@
+{
+  "_note": "Single source for the Download page. Only set status to 'available' after a real signed release exists in the releases repo, then fill version, released, url and sha256 for each file from that release's SHA256SUMS. Never point url at a preview or placeholder file.",
+  "status": "coming-soon",
+  "version": null,
+  "released": null,
+  "releasesRepo": "https://github.com/dhruvpatel2440/sentinelcore-releases",
+  "signingKey": {
+    "fingerprint": null,
+    "url": null
+  },
+  "downloads": [
+    {
+      "id": "package",
+      "label": "Installer package",
+      "file": "sentinelcore-installer-<version>.tar.gz",
+      "recommended": true,
+      "summary": "Contains install.sh, the setup wizard, signed checksums and the list of signed SentinelCore images. Extract it on Ubuntu, run sudo ./install.sh, and the wizard installs the full application.",
+      "command": null,
+      "url": null,
+      "sha256": null
+    },
+    {
+      "id": "installer",
+      "label": "One-line installer",
+      "file": "install.sh",
+      "recommended": false,
+      "summary": "Verifies a signature and checksum, installs the package, then starts the setup wizard. Needs Ubuntu or Debian and internet access.",
+      "command": null,
+      "url": null,
+      "sha256": null
+    },
+    {
+      "id": "deb",
+      "label": "Debian package (.deb)",
+      "file": "sentinelcore_<version>_all.deb",
+      "recommended": false,
+      "summary": "Installs the files and the sentinelcore command. Then run sudo sentinelcore install to start the wizard.",
+      "command": null,
+      "url": null,
+      "sha256": null
+    },
+    {
+      "id": "offline",
+      "label": "Offline bundle",
+      "file": "sentinelcore-offline-<version>.tar.gz",
+      "recommended": false,
+      "summary": "For machines without internet: container images, installer and signed checksums in one archive.",
+      "command": null,
+      "url": null,
+      "sha256": null
+    }
+  ]
+}

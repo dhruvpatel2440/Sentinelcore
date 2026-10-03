@@ -1,0 +1,29 @@
+name: Secret scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  no-sensitive-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real env files, keys and prompt notes must not be tracked
+        run: |
+          bad="$(git ls-files | grep -E '(^|/)\.env$|\.pem$|id_rsa|id_ed25519|(^|/)sentinelcore prompt/|private.*\.asc$' || true)"
+          if [ -n "$bad" ]; then echo "::error::sensitive files are tracked:"; echo "$bad"; exit 1; fi

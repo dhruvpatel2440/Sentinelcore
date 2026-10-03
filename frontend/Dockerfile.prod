@@ -1,0 +1,24 @@
+# Production frontend image: Vite build, then static files served by an
+# unprivileged nginx. No dev server, no sourcemaps, no source in the final image.
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+# Vite emits no sourcemaps unless build.sourcemap is set; assert it stays so.
+RUN npm run build && ! find dist -name '*.map' | grep -q .
+
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+# SPA fallback: unknown paths return index.html so client-side routes reload.
+RUN printf '%s\n' \
+  'server {' \
+  '  listen 8080;' \
+  '  server_name _;' \
+  '  root /usr/share/nginx/html;' \
+  '  index index.html;' \
+  '  server_tokens off;' \
+  '  location /assets/ { expires 7d; add_header Cache-Control "public, immutable"; }' \
+  '  location / { try_files $uri /index.html; add_header Cache-Control "no-cache"; }' \
+  '}' > /etc/nginx/conf.d/default.conf
+EXPOSE 8080

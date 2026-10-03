@@ -1,0 +1,30 @@
+# Release helper image. Same as helper/Dockerfile minus tests.
+#   docker build -f packaging/docker/Dockerfile.helper helper
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /opt/helper
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        nmap iproute2 iptables libpcap0.8 suricata suricata-update logrotate procps \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 2000 sentinelcore
+RUN mkdir -p /var/log/suricata /var/lib/suricata/rules /var/run/suricata \
+        /var/lib/sentinelcore/staging \
+    && touch /var/lib/suricata/rules/sentinelcore.rules
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+RUN rm -rf tests pytest.ini .pytest_cache
+
+ENV PYTHONPATH=/opt/helper
+
+# Runs as root by design: this IS the privilege boundary. Capabilities are
+# limited in the compose file, never `privileged: true`.
+CMD ["python", "-m", "helper.server"]

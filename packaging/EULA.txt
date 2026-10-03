@@ -1,0 +1,44 @@
+SENTINELCORE - END USER LICENCE AGREEMENT
+Version 1.0 (draft for the academic project; have it reviewed before any commercial use)
+
+1. Licence. Dhruv Patel and Nisarg Dedakiya ("the Authors") grant you a
+   personal, non-exclusive, non-transferable licence to install and run the
+   SentinelCore binaries and container images on machines you own or are
+   authorised to administer. All rights not expressly granted are reserved.
+
+2. Restrictions. You may not copy, redistribute, sell, sub-license, reverse
+   engineer, decompile or disassemble the software, or remove its notices,
+   except where applicable law gives you that right despite this restriction.
+
+3. Authorised monitoring only. SentinelCore captures and analyses network
+   traffic and can block addresses with the host firewall. Use it only on
+   networks you own or have explicit written permission to monitor. You are
+   responsible for complying with privacy, data-protection and computer-misuse
+   laws that apply to you, and for informing the people whose traffic is
+   observed where the law requires it.
+
+4. Third-party software. The product includes or installs open-source
+   components (for example Suricata, Nmap, PostgreSQL, Redis, nginx, Docker).
+   Those components are licensed under their own terms, which take precedence
+   for those components.
+
+5. No warranty. The software is provided "as is", without warranty of any
+   kind, express or implied, including fitness for a particular purpose or
+   that it will detect every threat. Detection results are not a guarantee of
+   security.
+
+6. Limitation of liability. To the maximum extent permitted by law, the
+   Authors are not liable for any indirect, incidental or consequential
+   damages, loss of data, or loss of network availability arising from use of
+   the software, including firewall rules that block legitimate traffic.
+
+7. Data. SentinelCore runs locally. It does not send your traffic, events or
+   configuration to the Authors. It contacts the internet only for actions you
+   enable: downloading Suricata rules, threat-intelligence feeds you add,
+   container image updates, update checks, and email delivery if you configure
+   it.
+
+8. Termination. This licence ends automatically if you breach it. On
+   termination you must stop using and delete the software.
+
+By choosing "Accept" you confirm that you have read and agree to these terms.

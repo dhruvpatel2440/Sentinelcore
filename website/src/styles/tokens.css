@@ -1,0 +1,119 @@
+/*
+ * SentinelCore website design tokens. ONE file: every colour, radius, spacing
+ * step, type size, outline, shadow and glass value used on the site lives here.
+ * Approximate values taken from the design sheet (docs/design/*.png, see README).
+ */
+
+:root {
+  /* ---- brand palette ---- */
+  --mint: #3dffc5;       /* primary accent */
+  --violet: #a855f7;     /* secondary accent */
+  --ink: #0b0b14;        /* darkest */
+  --night: #16162a;      /* dark base */
+  --lilac: #f0ebff;      /* light theme base */
+  --white: #ffffff;
+
+  /* ---- severity: fixed in both themes ---- */
+  --critical: #ff4b6e;
+  --high: #ff9a3c;
+  --medium: #ffd93d;
+  --low: #3db8ff;
+  --info: #9a98b0;
+
+  /* ---- geometry ---- */
+  --outline-w: 2.5px;
+  --outline-color: #000;                       /* black in both themes */
+  --outline: var(--outline-w) solid var(--outline-color);
+  --shadow-sm: 3px 3px 0 0 #000;               /* hard offset, zero blur */
+  --shadow-lg: 5px 5px 0 0 #000;
+  --shadow-press: 0 0 0 0 #000;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 26px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+
+  /* ---- type scale ---- */
+  --font-display: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --fs-display: 48px;
+  --fs-title: 24px;
+  --fs-heading: 16px;
+  --fs-body: 14px;
+  --fs-prose: 16px;      /* long-form copy is set one step above Body for reading comfort */
+  --fs-data: 13px;
+  --fs-label: 11px;
+
+  /* ---- glass ---- */
+  --glass-blur: 18px;
+  --glass-alpha-soft: 0.24;
+  --glass-alpha-strong: 0.55;
+
+  /* ---- motion ---- */
+  --lift: translate(-1px, -1px);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 140ms;
+
+  --content-max: 1120px;
+  --gutter: 16px;
+}
+
+/* ===== dark theme (default) ===== */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-solid: var(--ink);
+  --bg-gradient:
+    radial-gradient(900px 520px at 85% -5%, rgba(168, 85, 247, 0.38), transparent 60%),
+    radial-gradient(700px 480px at 5% 8%, rgba(61, 255, 197, 0.14), transparent 60%),
+    linear-gradient(165deg, #0b0b14 0%, #16162a 48%, #2a1553 100%);
+  --text: #f6f4ff;
+  --text-muted: #c9c5e6;
+  --text-on-accent: var(--ink);
+  --link: var(--mint);
+  --glass-base: 22, 22, 42;               /* night */
+  --glass-soft: rgba(var(--glass-base), var(--glass-alpha-soft));
+  --glass-strong: rgba(var(--glass-base), var(--glass-alpha-strong));
+  --surface-solid: #1d1d38;
+  --code-bg: #0b0b14;
+  --code-text: #e8fff7;
+  --focus: var(--mint);
+  --grid-line: rgba(255, 255, 255, 0.06);
+}
+
+/* ===== light theme ===== */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-solid: var(--lilac);
+  --bg-gradient:
+    radial-gradient(900px 520px at 85% -5%, rgba(168, 85, 247, 0.28), transparent 60%),
+    radial-gradient(700px 480px at 5% 8%, rgba(61, 255, 197, 0.32), transparent 60%),
+    linear-gradient(165deg, #f0ebff 0%, #e4dcff 55%, #d6c9ff 100%);
+  --text: #0b0b14;
+  --text-muted: #433f63;
+  --text-on-accent: var(--ink);
+  --link: #4c1d95;
+  --glass-base: 255, 255, 255;
+  --glass-soft: rgba(var(--glass-base), var(--glass-alpha-soft));
+  --glass-strong: rgba(var(--glass-base), var(--glass-alpha-strong));
+  --surface-solid: #ffffff;
+  --code-bg: #0b0b14;
+  --code-text: #e8fff7;
+  --focus: #4c1d95;
+  --grid-line: rgba(11, 11, 20, 0.07);
+}
+
+@media (min-width: 720px) {
+  :root {
+    --gutter: 24px;
+  }
+}

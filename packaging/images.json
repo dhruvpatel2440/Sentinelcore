@@ -1,0 +1,12 @@
+{
+  "version": "0.0.0",
+  "images": {
+    "DB_IMAGE": {"ref": "postgres:16-alpine", "digest": null},
+    "REDIS_IMAGE": {"ref": "redis:7.4-alpine", "digest": null},
+    "NGINX_IMAGE": {"ref": "nginx:1.27-alpine", "digest": null},
+    "BACKEND_IMAGE": {"ref": "ghcr.io/dhruvpatel2440/sentinelcore-backend:0.0.0", "digest": null},
+    "HELPER_IMAGE": {"ref": "ghcr.io/dhruvpatel2440/sentinelcore-helper:0.0.0", "digest": null},
+    "FRONTEND_IMAGE": {"ref": "ghcr.io/dhruvpatel2440/sentinelcore-frontend:0.0.0", "digest": null}
+  },
+  "_note": "Placeholder. scripts/release/make-images-manifest.py fills in real digests at release time."
+}

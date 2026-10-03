@@ -1,0 +1,16 @@
+title = "SentinelCore gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented non-secrets"
+paths = [
+  # Fixed, obviously non-production values committed on purpose.
+  '''\.env\.example$''',
+  '''\.github/workflows/ci\.yml$''',
+  '''\.github/workflows/release\.yml$''',
+  '''backend/scripts/e2e_.*\.py$''',
+  '''backend/tests/.*''',
+  '''docs/.*\.md$''',
+]

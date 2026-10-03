@@ -1,0 +1,29 @@
+[Unit]
+Description=SentinelCore network detection and response stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/sentinelcore
+ExecStart=/usr/bin/sentinelcore _compose up -d --remove-orphans
+ExecStop=/usr/bin/sentinelcore _compose stop
+ExecReload=/usr/bin/sentinelcore _compose up -d --remove-orphans
+TimeoutStartSec=300
+TimeoutStopSec=120
+# Compose restarts containers itself (restart: unless-stopped); this unit only
+# brings the stack up at boot and takes it down on shutdown. Hardening below
+# does not interfere with talking to dockerd.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target
