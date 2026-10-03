@@ -13,16 +13,21 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.api.routes.reports import _get_owned_report
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.incident import Incident, IncidentStatus
-from app.models.report import Report, ReportFormat, ReportStatus, ReportType
+from app.models.report import Report, ReportFormat, ReportSchedule, ReportStatus, ReportType
 from app.models.user import User, UserRole
 from app.reports.generator import resolve_report_path
-from app.reports.scheduling import RELATIVE_WINDOWS, resolve_relative_window
+from app.reports.scheduling import (
+    RELATIVE_WINDOWS,
+    is_one_shot,
+    resolve_relative_window,
+    run_due_schedules,
+)
 from app.reports.types import asset_inventory, event_statistics, incident_summary
 from app.schemas.report import (
     AssetInventoryParams,
@@ -327,3 +332,93 @@ def test_two_runs_a_week_apart_produce_different_correct_windows():
     assert r1["to"] != r2["to"]
     assert datetime.fromisoformat(r1["from"]) == run1 - timedelta(days=7)
     assert datetime.fromisoformat(r2["from"]) == run2 - timedelta(days=7)
+
+
+# ---------------------------------------------------------------------------
+# One-shot ("Once (date & time)") schedules
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "cron,expected",
+    [
+        ("0 9 6 10 *", True),  # 6 Oct 09:00 UTC — the shape the UI's "Once" builds
+        ("35 7 * * *", False),  # daily
+        ("30 20 * * 0", False),  # weekly
+        ("30 20 L * *", False),  # monthly on the last day
+        ("0 9 6 10 1", False),  # a pinned date *and* a weekday is not a single date
+        ("0 9 6 10", False),  # not five fields
+    ],
+)
+def test_is_one_shot_only_matches_a_single_pinned_date(cron, expected):
+    assert is_one_shot(cron) is expected
+
+
+class _FakeRedis:
+    def __init__(self):
+        self.pushed: list[str] = []
+
+    async def lpush(self, key, value):
+        self.pushed.append(value)
+
+
+@pytest.mark.asyncio
+async def test_one_shot_schedule_runs_once_then_disables_itself():
+    """croniter would roll a pinned-date cron forward a year; the scheduler
+    disables it instead, so the report generates exactly once."""
+    async with SessionLocal() as db:
+        admin = (await db.execute(select(User).where(User.role == UserRole.ADMIN).limit(1))).scalar_one_or_none()
+        if admin is None:
+            pytest.skip("no admin user seeded")
+        due = datetime.now(UTC) - timedelta(minutes=1)
+        schedule = ReportSchedule(
+            report_type=ReportType.EVENT_STATISTICS,
+            format=ReportFormat.PDF,
+            params={"window": "last_7_days"},
+            cron=f"{due.minute} {due.hour} {due.day} {due.month} *",
+            enabled=True,
+            next_run_at=due,
+            created_by=admin.id,
+        )
+        db.add(schedule)
+        await db.commit()
+        schedule_id = schedule.id
+        # run_due_schedules works on the whole table, so any *other* schedule
+        # that happens to be due right now would also fire and have its clock
+        # advanced. Snapshot every schedule and every report id, and put them
+        # back in the finally block.
+        others = {
+            s.id: (s.enabled, s.last_run_at, s.next_run_at)
+            for s in (await db.execute(select(ReportSchedule))).scalars().all()
+            if s.id != schedule_id
+        }
+        reports_before = {r for r in (await db.execute(select(Report.id))).scalars().all()}
+
+    redis = _FakeRedis()
+    try:
+        assert await run_due_schedules(SessionLocal, redis) >= 1
+        assert len(redis.pushed) >= 1
+
+        async with SessionLocal() as db:
+            after = await db.get(ReportSchedule, schedule_id)
+            assert after.enabled is False
+            assert after.next_run_at is None
+            assert after.last_run_at is not None
+
+        # A second tick must not enqueue it again.
+        before = len(redis.pushed)
+        await run_due_schedules(SessionLocal, redis)
+        async with SessionLocal() as db:
+            assert (await db.get(ReportSchedule, schedule_id)).enabled is False
+        assert len(redis.pushed) == before
+    finally:
+        async with SessionLocal() as db:
+            for other_id, (enabled, last_run, next_run) in others.items():
+                restored = await db.get(ReportSchedule, other_id)
+                if restored is not None:
+                    restored.enabled, restored.last_run_at, restored.next_run_at = enabled, last_run, next_run
+            now_ids = {r for r in (await db.execute(select(Report.id))).scalars().all()}
+            for new_id in now_ids - reports_before:
+                await db.execute(text("DELETE FROM reports WHERE id = :rid"), {"rid": str(new_id)})
+            await db.execute(text("DELETE FROM report_schedules WHERE id = :sid"), {"sid": str(schedule_id)})
+            await db.commit()

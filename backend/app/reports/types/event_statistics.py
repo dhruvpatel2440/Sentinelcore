@@ -52,7 +52,7 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
     dst_counts = await _bucket(Event.dst_ip, p.from_, p.to, limit=TOP_N)
 
     day_stmt = (
-        select(func.date_trunc("day", Event.ts).label("day"), Event.severity, func.count())
+        select(func.date_trunc("day", func.timezone("Asia/Kolkata", Event.ts)).label("day"), Event.severity, func.count())
         .select_from(Event)
         .where(Event.ts >= p.from_, Event.ts < p.to)
     )

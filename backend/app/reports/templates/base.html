@@ -26,7 +26,7 @@
 <div class="cover">
   <h1>{{ title }}</h1>
   <p class="muted">
-    Generated {{ generated_at_ist }} (UTC: {{ generated_at_utc }})<br>
+    Generated {{ generated_at_ist }}<br>
     Requested by {{ requested_by }}
   </p>
   <h2>Parameters</h2>
@@ -44,6 +44,6 @@
 
 {% block content %}{% endblock %}
 
-<div class="footer">SentinelCore &middot; {{ report_type }} report &middot; generated {{ generated_at_utc }} UTC &middot; checksum {{ data_checksum[:16] }}&hellip;</div>
+<div class="footer">SentinelCore &middot; {{ report_type }} report &middot; generated {{ generated_at_ist }} &middot; checksum {{ data_checksum[:16] }}&hellip;</div>
 </body>
 </html>

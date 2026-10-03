@@ -7,7 +7,7 @@ import Button from "../../components/Button";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { SEVERITIES } from "../events/filters";
-import { fromISTInputValue } from "../../lib/format";
+import { fromISTInputValue, toISTInputValue } from "../../lib/format";
 import MatchBlockEditor from "./MatchBlockEditor";
 import { GROUP_BY_FIELDS, RULE_TYPES, defaultParamsFor } from "./ruleTypes";
 
@@ -150,8 +150,8 @@ export default function RuleEditor({ ruleId, open, onClose, onSaved }) {
     if (!open) return;
     setTestResult(null);
     const now = new Date();
-    setTestTo(now.toISOString().slice(0, 16));
-    setTestFrom(new Date(now.getTime() - 24 * 3600 * 1000).toISOString().slice(0, 16));
+    setTestTo(toISTInputValue(now.toISOString()));
+    setTestFrom(toISTInputValue(new Date(now.getTime() - 24 * 3600 * 1000).toISOString()));
 
     if (!ruleId) {
       setForm(emptyForm());

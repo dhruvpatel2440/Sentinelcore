@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,9 @@ from app.models.correlation import CorrelationRule
 from app.models.incident import TERMINAL_STATUSES, Incident
 from app.models.user import User
 from app.schemas.report import IncidentSummaryParams
+
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def _val(x: Any) -> str:
@@ -60,10 +64,10 @@ async def build(params: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
         if inc.src_ip:
             src_ip_counts[str(inc.src_ip)] = src_ip_counts.get(str(inc.src_ip), 0) + 1
 
-        day = inc.opened_at.date().isoformat()
+        day = inc.opened_at.astimezone(IST).date().isoformat()
         opened_by_day[day] = opened_by_day.get(day, 0) + 1
         if inc.closed_at:
-            cday = inc.closed_at.date().isoformat()
+            cday = inc.closed_at.astimezone(IST).date().isoformat()
             closed_by_day[cday] = closed_by_day.get(cday, 0) + 1
 
     async def _names(ids: dict[str, int], model, name_attr: str, limit: int = 5) -> list[dict]:

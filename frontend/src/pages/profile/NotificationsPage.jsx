@@ -189,17 +189,24 @@ export default function NotificationsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400" htmlFor="digest-hour">
-                    Hour (UTC)
+                    Send time (IST)
                   </label>
-                  <input
+                  <select
                     id="digest-hour"
-                    type="number"
-                    min={0}
-                    max={23}
                     value={prefs.digest_hour_utc}
                     onChange={(e) => save({ digest_hour_utc: Number(e.target.value) })}
                     className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
-                  />
+                  >
+                    {Array.from({ length: 24 }, (_, h) => {
+                      const mins = (h * 60 + 330) % 1440;
+                      const label = `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+                      return (
+                        <option key={h} value={h}>
+                          {label} IST
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
             )}

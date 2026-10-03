@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 from croniter import croniter
@@ -29,6 +30,21 @@ RELATIVE_WINDOWS: dict[str, timedelta] = {
 }
 
 CHECK_INTERVAL_SECONDS = 60
+
+_NUMERIC_FIELD = re.compile(r"^\d+$")
+
+
+def is_one_shot(cron: str) -> bool:
+    """A cron with its minute, hour, day-of-month and month all pinned to a
+    number names one calendar date, which is how the UI's "Once (date & time)"
+    option encodes a single run. croniter would roll such a schedule forward a
+    year, so `run_due_schedules` disables it after its one run instead.
+    Mirrors `isOneShot` in frontend/src/pages/reports/constants.js."""
+    parts = (cron or "").split()
+    if len(parts) != 5:
+        return False
+    minute, hour, dom, month, dow = parts
+    return all(_NUMERIC_FIELD.match(f) for f in (minute, hour, dom, month)) and dow == "*"
 
 
 def resolve_relative_window(params: dict, now: datetime) -> dict:
@@ -76,6 +92,10 @@ async def run_due_schedules(sessionmaker: async_sessionmaker[AsyncSession], redi
             enqueued += 1
 
             schedule.last_run_at = now
+            if is_one_shot(schedule.cron):
+                schedule.next_run_at = None
+                schedule.enabled = False
+                continue
             try:
                 schedule.next_run_at = croniter(schedule.cron, now).get_next(datetime)
             except (ValueError, KeyError) as exc:

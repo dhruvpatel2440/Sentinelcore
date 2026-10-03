@@ -124,7 +124,6 @@ def render_pdf(*, report_type: str, title: str, params: dict[str, Any], requeste
         "report_type": report_type,
         "params": params,
         "requested_by": requested_by,
-        "generated_at_utc": now.strftime("%Y-%m-%d %H:%M:%S"),
         "generated_at_ist": format_ist(now),
         "data_checksum": checksum,
         "data": data,

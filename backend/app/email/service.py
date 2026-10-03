@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy import text as sa_text
@@ -29,6 +30,9 @@ from app.models.user import User
 logger = logging.getLogger("sentinelcore.email.service")
 
 
+IST = ZoneInfo("Asia/Kolkata")
+
+
 @dataclass(frozen=True)
 class Recipient:
     email: str
@@ -36,7 +40,12 @@ class Recipient:
 
 
 def _today_start(now: datetime) -> datetime:
-    return datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+    """Start of the current IST day, as a UTC instant. The caps are a per-day
+    budget and this platform is operated from IST, so the budget has to roll
+    over at IST midnight — a UTC-midnight reset lands at 05:30 IST, halfway
+    through the Indian working morning."""
+    ist_today = now.astimezone(IST).date()
+    return datetime.combine(ist_today, time.min, tzinfo=IST).astimezone(timezone.utc)
 
 
 async def get_settings_row(db: AsyncSession) -> EmailSettings:

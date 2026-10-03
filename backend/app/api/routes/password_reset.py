@@ -51,7 +51,7 @@ async def request_reset(
     else:
         await audit.record(
             db, action="auth.password_reset_requested", username=payload.username,
-            outcome="no_such_account_or_inactive", request=request,
+            outcome="not_found", request=request,
         )
         await db.commit()
 
