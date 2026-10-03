@@ -7,6 +7,7 @@ import Button from "../../components/Button";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { SEVERITIES } from "../events/filters";
+import { fromISTInputValue } from "../../lib/format";
 import MatchBlockEditor from "./MatchBlockEditor";
 import { GROUP_BY_FIELDS, RULE_TYPES, defaultParamsFor } from "./ruleTypes";
 
@@ -213,8 +214,8 @@ export default function RuleEditor({ ruleId, open, onClose, onSaved }) {
     setTestResult(null);
     try {
       const result = await api.post(`/correlation/rules/${ruleId}/test`, {
-        from: new Date(testFrom).toISOString(),
-        to: new Date(testTo).toISOString(),
+        from: fromISTInputValue(testFrom),
+        to: fromISTInputValue(testTo),
       });
       setTestResult(result);
     } catch (err) {
@@ -372,7 +373,7 @@ export default function RuleEditor({ ruleId, open, onClose, onSaved }) {
               </h4>
               <div className="flex flex-wrap items-end gap-2">
                 <div>
-                  <label className="text-xs text-slate-400">From</label>
+                  <label className="text-xs text-slate-400">From (IST)</label>
                   <input
                     type="datetime-local"
                     className={inputClass}
@@ -381,7 +382,7 @@ export default function RuleEditor({ ruleId, open, onClose, onSaved }) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400">To</label>
+                  <label className="text-xs text-slate-400">To (IST)</label>
                   <input
                     type="datetime-local"
                     className={inputClass}
