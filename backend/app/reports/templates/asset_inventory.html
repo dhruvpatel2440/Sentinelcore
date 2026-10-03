@@ -23,7 +23,7 @@
     <td>{{ a.mac_address or "—" }}{% if a.vendor %} ({{ a.vendor }}){% endif %}</td>
     <td>{{ a.os_guess or "—" }}</td>
     <td>{% for p in a.ports %}{% if p.state == "open" %}{{ p.port }}/{{ p.protocol }}{% if p.service %} ({{ p.service }}){% endif %}<br>{% endif %}{% endfor %}</td>
-    <td>{{ a.last_seen }}</td>
+    <td>{{ a.last_seen|ist }}</td>
     <td>{{ a.incident_count }}</td>
     <td>
       {% if a.is_stale %}<span class="warn">stale</span>{% endif %}

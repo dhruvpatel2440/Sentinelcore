@@ -13,9 +13,9 @@
   <tr><td>Source IP</td><td>{{ i.src_ip or "—" }}</td></tr>
   <tr><td>Destination IP</td><td>{{ i.dst_ip or "—" }}</td></tr>
   <tr><td>Rule</td><td>{{ i.rule_name or "manual" }}</td></tr>
-  <tr><td>Opened</td><td>{{ i.opened_at }}</td></tr>
-  <tr><td>Acknowledged</td><td>{{ i.acknowledged_at or "—" }}</td></tr>
-  <tr><td>Closed</td><td>{{ i.closed_at or "—" }} {% if i.closed_by %}by {{ i.closed_by }}{% endif %}</td></tr>
+  <tr><td>Opened</td><td>{{ i.opened_at|ist }}</td></tr>
+  <tr><td>Acknowledged</td><td>{{ (i.acknowledged_at or "—")|ist }}</td></tr>
+  <tr><td>Closed</td><td>{{ (i.closed_at or "—")|ist }} {% if i.closed_by %}by {{ i.closed_by }}{% endif %}</td></tr>
   <tr><td>Assignee</td><td>{{ i.assignee or "unassigned" }}</td></tr>
 </table>
 
@@ -27,7 +27,7 @@
 <table>
   <tr><th>Field</th><th>Value</th></tr>
   {% for key, value in i.evidence.items() %}
-  <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+  <tr><td>{{ key }}</td><td>{{ value|ist }}</td></tr>
   {% endfor %}
 </table>
 {% endif %}
@@ -54,7 +54,7 @@
   <tr><th>When</th><th>Who</th><th>Action</th><th>Detail</th></tr>
   {% for h in data.history %}
   <tr>
-    <td>{{ h.created_at }}</td><td>{{ h.user or "system" }}</td><td>{{ h.action }}</td>
+    <td>{{ h.created_at|ist }}</td><td>{{ h.user or "system" }}</td><td>{{ h.action }}</td>
     <td>{% if h.note %}{{ h.note }}{% elif h.from_value %}{{ h.from_value }} &rarr; {{ h.to_value }}{% endif %}</td>
   </tr>
   {% endfor %}
@@ -64,7 +64,7 @@
 <table>
   <tr><th>Time</th><th>Severity</th><th>Signature</th><th>Src</th><th>Dst</th></tr>
   {% for e in data.events %}
-  <tr><td>{{ e.ts }}</td><td>{{ e.severity }}</td><td>{{ e.signature or "—" }}</td><td>{{ e.src_ip or "—" }}</td><td>{{ e.dst_ip or "—" }}</td></tr>
+  <tr><td>{{ e.ts|ist }}</td><td>{{ e.severity }}</td><td>{{ e.signature or "—" }}</td><td>{{ e.src_ip or "—" }}</td><td>{{ e.dst_ip or "—" }}</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

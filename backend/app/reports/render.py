@@ -15,6 +15,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
@@ -23,10 +24,36 @@ from app.reports import charts
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
+# Every report is read by an Indian analyst — timestamps are rendered in IST
+# rather than UTC or the report-generating container's own timezone, which
+# would otherwise be whatever the host happens to run (usually UTC).
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def format_ist(value: Any) -> Any:
+    """Jinja filter: datetime/ISO-string -> 'YYYY-MM-DD HH:MM:SS IST'.
+    Anything that isn't a timestamp (None, a list of severities, a bare
+    CIDR string, ...) passes through unchanged, since this filter is also
+    applied to the mixed-type `params` table in base.html."""
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    else:
+        return value
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S IST")
+
+
 _env = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
     autoescape=select_autoescape(["html"]),
 )
+_env.filters["ist"] = format_ist
 
 
 def data_checksum(data: dict[str, Any]) -> str:
@@ -98,7 +125,7 @@ def render_pdf(*, report_type: str, title: str, params: dict[str, Any], requeste
         "params": params,
         "requested_by": requested_by,
         "generated_at_utc": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "generated_at_local": now.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "generated_at_ist": format_ist(now),
         "data_checksum": checksum,
         "data": data,
         **_extra_context(report_type, data),
@@ -115,14 +142,14 @@ def render_csv(report_type: str, data: dict[str, Any]) -> bytes:
     buf = io.StringIO()
 
     if report_type == "incident_summary":
-        rows = data["table"]
+        rows = [{**r, "opened_at": format_ist(r["opened_at"]), "closed_at": format_ist(r["closed_at"] or "—")} for r in data["table"]]
         fieldnames = ["number", "title", "rule", "severity", "status", "opened_at", "closed_at", "assignee"]
     elif report_type == "asset_inventory":
         rows = [
             {
                 "ip_address": r["ip_address"], "hostname": r["hostname"], "mac_address": r["mac_address"],
                 "vendor": r["vendor"], "os_guess": r["os_guess"], "is_active": r["is_active"],
-                "last_seen": r["last_seen"], "is_stale": r["is_stale"], "incident_count": r["incident_count"],
+                "last_seen": format_ist(r["last_seen"]), "is_stale": r["is_stale"], "incident_count": r["incident_count"],
                 "high_risk_ports": ",".join(str(p) for p in r["high_risk_ports"]),
             }
             for r in data["table"]

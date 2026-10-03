@@ -25,10 +25,18 @@ export function relativeTime(value) {
   return rtf.format(Math.round(seconds / 31536000), "year");
 }
 
+// Fixed to IST regardless of the viewer's own locale/OS timezone, so every
+// analyst sees the same wall-clock time for a given event.
+const ABSOLUTE_TIME_FORMATTER = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric", month: "short", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+});
+
 export function absoluteTime(value) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "—" : `${ABSOLUTE_TIME_FORMATTER.format(date)} IST`;
 }
 
 export function duration(seconds) {

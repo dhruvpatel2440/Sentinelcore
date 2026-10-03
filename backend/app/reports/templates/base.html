@@ -26,14 +26,14 @@
 <div class="cover">
   <h1>{{ title }}</h1>
   <p class="muted">
-    Generated {{ generated_at_utc }} UTC &middot; {{ generated_at_local }} local<br>
+    Generated {{ generated_at_ist }} (UTC: {{ generated_at_utc }})<br>
     Requested by {{ requested_by }}
   </p>
   <h2>Parameters</h2>
   <table>
     <tr><th>Parameter</th><th>Value</th></tr>
     {% for k, v in params.items() %}
-    <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+    <tr><td>{{ k }}</td><td>{{ v|ist }}</td></tr>
     {% endfor %}
   </table>
   <p class="muted">
