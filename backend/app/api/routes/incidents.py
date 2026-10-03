@@ -345,7 +345,7 @@ async def get_incident(
     return IncidentDetailOut(
         **IncidentOut.model_validate(incident, from_attributes=True).model_dump(),
         assignee_username=assignee.username if assignee else None,
-        rule_name=rule.name if rule else None,
+        rule_name=rule.name if rule else incident.signature_name,
         asset_hostname=asset.display_hostname if asset else None,
         recent_history=[
             IncidentHistoryOut.model_validate(h, from_attributes=True).model_copy(update={"username": u})

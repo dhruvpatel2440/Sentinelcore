@@ -25,10 +25,42 @@ export function relativeTime(value) {
   return rtf.format(Math.round(seconds / 31536000), "year");
 }
 
+// Fixed to IST regardless of the viewer's own locale/OS timezone, so every
+// analyst sees the same wall-clock time for a given event.
+const ABSOLUTE_TIME_FORMATTER = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric", month: "short", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+});
+
 export function absoluteTime(value) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "—" : `${ABSOLUTE_TIME_FORMATTER.format(date)} IST`;
+}
+
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
+/** ISO instant -> "YYYY-MM-DDTHH:mm" of its IST wall-clock, for feeding
+ * `<input type="datetime-local">` — that element always displays/edits in
+ * whatever timezone the browser happens to be in, so to show IST on any
+ * machine we shift the instant ourselves and read it back out with UTC
+ * getters (which never apply a timezone) rather than relying on the
+ * browser's local getters. */
+export function toISTInputValue(isoValue) {
+  if (!isoValue) return "";
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, 16);
+}
+
+/** Reverse of toISTInputValue: the "YYYY-MM-DDTHH:mm" a user picked, which
+ * they intend as IST wall-clock, -> the correct absolute ISO instant. */
+export function fromISTInputValue(inputValue) {
+  if (!inputValue) return null;
+  const asIfUtc = new Date(`${inputValue}:00.000Z`);
+  if (Number.isNaN(asIfUtc.getTime())) return null;
+  return new Date(asIfUtc.getTime() - IST_OFFSET_MS).toISOString();
 }
 
 export function duration(seconds) {

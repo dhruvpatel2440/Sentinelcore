@@ -2,16 +2,10 @@ import { Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import Badge from "../../components/Badge";
+import { fromISTInputValue, toISTInputValue } from "../../lib/format";
 import { EVENT_TYPES, RANGE_PRESETS, SEVERITIES, activeFilterPills, isValidCidrOrIp } from "./filters";
 
 const SEVERITY_TONE = { critical: "critical", high: "high", medium: "medium", low: "low", info: "info" };
-
-function toLocalInputValue(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /**
  * Sticky filter bar: time presets, severity chips, IP/CIDR, free text,
@@ -88,23 +82,20 @@ export default function FilterBar({ filters, onChange, onApplyPreset, activeRang
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <input
             type="datetime-local"
-            aria-label="Custom range start"
-            value={toLocalInputValue(filters.from)}
-            onChange={(e) =>
-              onChange({ from: e.target.value ? new Date(e.target.value).toISOString() : undefined })
-            }
+            aria-label="Custom range start (IST)"
+            value={toISTInputValue(filters.from)}
+            onChange={(e) => onChange({ from: e.target.value ? fromISTInputValue(e.target.value) : undefined })}
             className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
           />
           <span>to</span>
           <input
             type="datetime-local"
-            aria-label="Custom range end"
-            value={toLocalInputValue(filters.to)}
-            onChange={(e) =>
-              onChange({ to: e.target.value ? new Date(e.target.value).toISOString() : undefined })
-            }
+            aria-label="Custom range end (IST)"
+            value={toISTInputValue(filters.to)}
+            onChange={(e) => onChange({ to: e.target.value ? fromISTInputValue(e.target.value) : undefined })}
             className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
           />
+          <span className="text-slate-500">IST</span>
         </div>
       </div>
 

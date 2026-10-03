@@ -10,7 +10,7 @@ export const GROUP_BY_FIELDS = ["src_ip", "dst_ip", "signature_id", "dst_port", 
 export function defaultParamsFor(ruleType) {
   switch (ruleType) {
     case "threshold":
-      return { count_distinct_field: "" };
+      return { count_distinct_field: null };
     case "sequence":
       return { steps: [{ signature_id: [] }, { signature_id: [] }] };
     case "rare":

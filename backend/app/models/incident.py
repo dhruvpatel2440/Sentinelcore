@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -17,7 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import INET
+from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -96,6 +97,11 @@ class Incident(Base):
     candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("incident_candidates.id", ondelete="SET NULL"), nullable=True, unique=True
     )
+
+    # Set for PCAP-sourced incidents (app/pcap/detection.py), where there is
+    # no CorrelationRule row to join against for a display name.
+    signature_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     first_event_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

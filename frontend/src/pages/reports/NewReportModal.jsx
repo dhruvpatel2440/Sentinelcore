@@ -6,6 +6,7 @@ import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { EVENT_TYPES, SEVERITIES } from "../events/filters";
 import { STATUS_LABEL } from "../incidents/constants";
+import { fromISTInputValue, toISTInputValue } from "../../lib/format";
 import { FORMATS, RANGE_PRESETS, REPORT_TYPES } from "./constants";
 
 const INCIDENT_STATUSES = Object.keys(STATUS_LABEL);
@@ -170,7 +171,7 @@ export default function NewReportModal({ open, onClose, onCreated, prefill }) {
 
         {meta?.needsWindow && (
           <div>
-            <label className="text-xs font-medium text-slate-300">Window</label>
+            <label className="text-xs font-medium text-slate-300">Window (IST)</label>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {RANGE_PRESETS.map((p) => (
                 <button
@@ -190,14 +191,14 @@ export default function NewReportModal({ open, onClose, onCreated, prefill }) {
             <div className="mt-2 grid grid-cols-2 gap-2">
               <input
                 type="datetime-local"
-                value={window_.from.slice(0, 16)}
-                onChange={(e) => setWindow((w) => ({ ...w, from: new Date(e.target.value).toISOString() }))}
+                value={toISTInputValue(window_.from)}
+                onChange={(e) => setWindow((w) => ({ ...w, from: fromISTInputValue(e.target.value) || w.from }))}
                 className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
               />
               <input
                 type="datetime-local"
-                value={window_.to.slice(0, 16)}
-                onChange={(e) => setWindow((w) => ({ ...w, to: new Date(e.target.value).toISOString() }))}
+                value={toISTInputValue(window_.to)}
+                onChange={(e) => setWindow((w) => ({ ...w, to: fromISTInputValue(e.target.value) || w.to }))}
                 className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
               />
             </div>

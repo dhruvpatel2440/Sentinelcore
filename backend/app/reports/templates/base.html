@@ -26,14 +26,14 @@
 <div class="cover">
   <h1>{{ title }}</h1>
   <p class="muted">
-    Generated {{ generated_at_utc }} UTC &middot; {{ generated_at_local }} local<br>
+    Generated {{ generated_at_ist }}<br>
     Requested by {{ requested_by }}
   </p>
   <h2>Parameters</h2>
   <table>
     <tr><th>Parameter</th><th>Value</th></tr>
     {% for k, v in params.items() %}
-    <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+    <tr><td>{{ k }}</td><td>{{ v|ist }}</td></tr>
     {% endfor %}
   </table>
   <p class="muted">
@@ -44,6 +44,6 @@
 
 {% block content %}{% endblock %}
 
-<div class="footer">SentinelCore &middot; {{ report_type }} report &middot; generated {{ generated_at_utc }} UTC &middot; checksum {{ data_checksum[:16] }}&hellip;</div>
+<div class="footer">SentinelCore &middot; {{ report_type }} report &middot; generated {{ generated_at_ist }} &middot; checksum {{ data_checksum[:16] }}&hellip;</div>
 </body>
 </html>

@@ -186,6 +186,11 @@ async def update_schedule(
     for field, value in changes.items():
         setattr(schedule, field, value)
 
+    # Re-enabling a spent one-shot (next_run_at cleared by the scheduler) would
+    # otherwise read as "due now" and fire the moment the worker next ticks.
+    if changes.get("enabled") and schedule.next_run_at is None:
+        schedule.next_run_at = croniter(schedule.cron, datetime.now(timezone.utc)).get_next(datetime)
+
     await audit.record(
         db, action="report.schedule_updated", user=actor, resource_type="report_schedule", resource_id=schedule.id,
         detail=changes, request=request,
