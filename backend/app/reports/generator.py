@@ -180,22 +180,45 @@ async def _notify_report_failed(db: AsyncSession, report: Report, exc: Exception
     await db.commit()
 
 
-async def reconcile_stuck_reports(sessionmaker: async_sessionmaker[AsyncSession]) -> int:
+async def reconcile_stuck_reports(
+    sessionmaker: async_sessionmaker[AsyncSession], redis: aioredis.Redis
+) -> int:
     """Startup safety net: a worker crash mid-generation leaves a row in
-    `running` forever unless something fails it."""
+    `running` forever unless something fails it. A crash between the BRPOP
+    (which removes the id from the queue) and the first commit (which flips
+    it to `running`) is the same failure, just caught one step earlier —
+    the row is still `queued` but its id is nowhere in the queue to ever be
+    popped again, so it would otherwise sit there forever."""
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.report_generation_timeout_seconds)
     async with sessionmaker() as db:
-        stuck = (
+        running = (
             await db.execute(
                 select(Report).where(Report.status == ReportStatus.RUNNING, Report.started_at < cutoff)
             )
         ).scalars().all()
+        queued = (
+            await db.execute(
+                select(Report).where(Report.status == ReportStatus.QUEUED, Report.requested_at < cutoff)
+            )
+        ).scalars().all()
+
+        orphaned_queued = []
+        for report in queued:
+            if await redis.lpos(settings.report_queue_key, str(report.id)) is None:
+                orphaned_queued.append(report)
+
+        stuck = running + orphaned_queued
+        for report in running:
+            report.error = "worker restarted mid-generation"
+        for report in orphaned_queued:
+            report.error = "lost from the report queue, likely a worker restart between dequeue and run"
         for report in stuck:
             report.status = ReportStatus.FAILED
-            report.error = "worker restarted mid-generation"
             report.completed_at = datetime.now(timezone.utc)
         if stuck:
             await db.commit()
+            for report in stuck:
+                await _notify_report_failed(db, report, RuntimeError(report.error))
         return len(stuck)
 
 
@@ -222,7 +245,7 @@ async def run_forever(
     sessionmaker: async_sessionmaker[AsyncSession], redis: aioredis.Redis, stop: asyncio.Event
 ) -> None:
     logger.info("report generator starting, queue=%s", settings.report_queue_key)
-    reconciled = await reconcile_stuck_reports(sessionmaker)
+    reconciled = await reconcile_stuck_reports(sessionmaker, redis)
     if reconciled:
         logger.info("reconciled %d stuck report(s) on startup", reconciled)
 
