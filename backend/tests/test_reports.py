@@ -21,7 +21,7 @@ from app.db.session import SessionLocal
 from app.models.incident import Incident, IncidentStatus
 from app.models.report import Report, ReportFormat, ReportSchedule, ReportStatus, ReportType
 from app.models.user import User, UserRole
-from app.reports.generator import resolve_report_path
+from app.reports.generator import reconcile_stuck_reports, resolve_report_path
 from app.reports.scheduling import (
     RELATIVE_WINDOWS,
     is_one_shot,
@@ -355,11 +355,15 @@ def test_is_one_shot_only_matches_a_single_pinned_date(cron, expected):
 
 
 class _FakeRedis:
-    def __init__(self):
+    def __init__(self, queued: list[str] | None = None):
         self.pushed: list[str] = []
+        self._queued = queued or []
 
     async def lpush(self, key, value):
         self.pushed.append(value)
+
+    async def lpos(self, key, value):
+        return self._queued.index(value) if value in self._queued else None
 
 
 @pytest.mark.asyncio
@@ -421,4 +425,61 @@ async def test_one_shot_schedule_runs_once_then_disables_itself():
             for new_id in now_ids - reports_before:
                 await db.execute(text("DELETE FROM reports WHERE id = :rid"), {"rid": str(new_id)})
             await db.execute(text("DELETE FROM report_schedules WHERE id = :sid"), {"sid": str(schedule_id)})
+            await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Orphaned-queue reconciliation — a worker crash between BRPOP (which
+# removes the report id from the queue) and the first commit (which flips
+# the row to `running`) must not leave the row `queued` forever.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reconcile_fails_a_queued_report_missing_from_the_queue():
+    old = datetime.now(UTC) - timedelta(seconds=settings.report_generation_timeout_seconds + 60)
+    async with SessionLocal() as db:
+        orphan = Report(
+            report_type=ReportType.EVENT_STATISTICS, title="t", params={"window": "last_7_days"},
+            format=ReportFormat.PDF, status=ReportStatus.QUEUED, requested_at=old,
+        )
+        db.add(orphan)
+        await db.commit()
+        orphan_id = orphan.id
+
+    try:
+        n = await reconcile_stuck_reports(SessionLocal, _FakeRedis(queued=[]))
+        assert n >= 1
+        async with SessionLocal() as db:
+            after = await db.get(Report, orphan_id)
+            assert after.status == ReportStatus.FAILED
+            assert "queue" in after.error
+    finally:
+        async with SessionLocal() as db:
+            await db.execute(text("DELETE FROM reports WHERE id = :rid"), {"rid": str(orphan_id)})
+            await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_leaves_a_still_queued_report_alone():
+    """A backlogged report whose id is still sitting in the redis list is
+    not an orphan — it just hasn't been popped yet."""
+    old = datetime.now(UTC) - timedelta(seconds=settings.report_generation_timeout_seconds + 60)
+    async with SessionLocal() as db:
+        backlogged = Report(
+            report_type=ReportType.EVENT_STATISTICS, title="t", params={"window": "last_7_days"},
+            format=ReportFormat.PDF, status=ReportStatus.QUEUED, requested_at=old,
+        )
+        db.add(backlogged)
+        await db.commit()
+        backlogged_id = backlogged.id
+
+    try:
+        await reconcile_stuck_reports(SessionLocal, _FakeRedis(queued=[str(backlogged_id)]))
+        async with SessionLocal() as db:
+            after = await db.get(Report, backlogged_id)
+            assert after.status == ReportStatus.QUEUED
+    finally:
+        async with SessionLocal() as db:
+            await db.execute(text("DELETE FROM reports WHERE id = :rid"), {"rid": str(backlogged_id)})
             await db.commit()
