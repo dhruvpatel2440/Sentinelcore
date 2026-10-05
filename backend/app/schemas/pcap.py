@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.pcap import ArtifactType, PcapStatus
 
@@ -60,6 +60,12 @@ class PcapFlowOut(BaseModel):
     dst_asset_id: uuid.UUID | None
     src_asset_hostname: str | None = None
     dst_asset_hostname: str | None = None
+
+    @field_validator("src_ip", "dst_ip", mode="before")
+    @classmethod
+    def _stringify(cls, v: Any) -> Any:
+        # asyncpg returns INET as ipaddress objects.
+        return str(v) if v is not None else None
 
 
 class PcapArtifactOut(BaseModel):

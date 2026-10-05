@@ -45,9 +45,9 @@ export default function PcapPage() {
     load();
   }, [load]);
 
-  // Poll only while something is still parsing, same pattern as Reports.
+  // Poll only while something is still queued or parsing, same pattern as Reports.
   useEffect(() => {
-    const hasPending = captures.some((c) => c.status === "parsing");
+    const hasPending = captures.some((c) => c.status === "uploaded" || c.status === "parsing");
     if (!hasPending) return undefined;
     const timer = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(timer);
