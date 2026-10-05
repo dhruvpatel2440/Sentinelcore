@@ -92,6 +92,10 @@ def _require_binaries() -> None:
 
 def _parse_capinfos_datetime(value: str) -> datetime | None:
     value = value.replace(" UTC", "").strip()
+    # Nanosecond-resolution captures print 9 fractional digits; %f takes at most 6.
+    head, dot, frac = value.partition(".")
+    if dot:
+        value = f"{head}.{frac[:6]}"
     for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
             return datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
@@ -102,7 +106,7 @@ def _parse_capinfos_datetime(value: str) -> datetime | None:
 
 async def parse_metadata(path: Path) -> dict[str, Any]:
     _require_binaries()
-    argv = [CAPINFOS_PATH, "-M", "-u", str(path)]
+    argv = [CAPINFOS_PATH, "-M", str(path)]
     proc = await asyncio.create_subprocess_exec(
         *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, preexec_fn=_limit_resources
     )
