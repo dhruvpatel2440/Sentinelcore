@@ -24,6 +24,7 @@ from typing import Any
 from sqlalchemy import Select, String, cast, func, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import INET
 
+from app.core.sql import LIKE_ESCAPE, like_contains
 from app.models.event import Event, EventType, Severity
 
 
@@ -128,9 +129,9 @@ def apply_filters(stmt: Select[Any], filters: EventFilters) -> Select[Any]:
     if filters.signature_id:
         stmt = stmt.where(Event.signature_id.in_(filters.signature_id))
     if filters.q:
-        pattern = f"%{filters.q}%"
+        pattern = like_contains(filters.q)
         stmt = stmt.where(
-            or_(Event.signature.ilike(pattern), Event.category.ilike(pattern))
+            or_(Event.signature.ilike(pattern, escape=LIKE_ESCAPE), Event.category.ilike(pattern, escape=LIKE_ESCAPE))
         )
     if filters.asset_id:
         stmt = stmt.where(

@@ -24,7 +24,7 @@ from app.schemas.firewall import (
     FirewallPrecheckResult,
     FirewallStatus,
 )
-from app.services import firewall, helper_client
+from app.services import audit, firewall, helper_client
 from app.services.firewall import LAST_RECONCILIATION_KEY, FirewallGuardRejected, MaxActiveBlocksReached, remaining_seconds
 
 router = APIRouter(prefix="/firewall", tags=["firewall"])
@@ -188,8 +188,13 @@ async def get_status(
 
 @router.post("/reconcile", response_model=dict)
 async def force_reconcile(
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role("admin")),
+    actor: User = Depends(require_role("admin")),
 ) -> dict:
     redis = get_redis()
-    return await firewall.reconcile(db, redis)
+    result = await firewall.reconcile(db, redis)
+    # Reconcile can remove kernel rules, so record who triggered it.
+    await audit.record(db, action="firewall.reconcile", user=actor, resource_type="firewall", request=request)
+    await db.commit()
+    return result

@@ -12,6 +12,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
+from app.core.sql import LIKE_ESCAPE, like_contains
 from app.db.session import get_db
 from app.email import recipients as email_recipients
 from app.email.render import app_link
@@ -195,8 +196,8 @@ async def list_incidents(
         stmt = stmt.where(Incident.assigned_to == uuid.UUID(assigned_to))
 
     if q:
-        pattern = f"%{q}%"
-        conditions = [Incident.title.ilike(pattern), cast(Incident.src_ip, String).ilike(pattern)]
+        pattern = like_contains(q)
+        conditions = [Incident.title.ilike(pattern, escape=LIKE_ESCAPE), cast(Incident.src_ip, String).ilike(pattern, escape=LIKE_ESCAPE)]
         if q.strip().lstrip("INC-").isdigit():
             conditions.append(Incident.number == int(q.strip().lstrip("INC-")))
         stmt = stmt.where(or_(*conditions))

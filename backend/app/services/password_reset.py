@@ -25,6 +25,9 @@ from app.models.user import User
 
 TOKEN_TTL_MINUTES = 30
 RATE_LIMIT_PER_HOUR = 3
+# Per-account ceiling across ALL source IPs. Much higher than the per-(account, IP)
+# limit so a third party cannot lock the real owner out of recovery.
+ACCOUNT_GLOBAL_LIMIT_PER_HOUR = 20
 RATE_LIMIT_WINDOW_SECONDS = 3600
 
 
@@ -32,22 +35,25 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def _rate_limited(key: str) -> bool:
+async def _rate_limited(key: str, limit: int = RATE_LIMIT_PER_HOUR) -> bool:
     try:
         redis = get_redis()
         count = await redis.incr(key)
         if count == 1:
             await redis.expire(key, RATE_LIMIT_WINDOW_SECONDS)
-        return count > RATE_LIMIT_PER_HOUR
+        return count > limit
     except Exception:
         # Redis down must not block password recovery entirely.
         return False
 
 
 async def is_rate_limited(*, username: str, ip: str | None) -> bool:
-    acct_hit = await _rate_limited(f"pwreset:acct:{username.lower()}")
-    ip_hit = await _rate_limited(f"pwreset:ip:{ip or '-'}")
-    return acct_hit or ip_hit
+    # Keyed on (account, IP): an attacker burning their own quota against a
+    # victim's username no longer exhausts the quota the victim needs.
+    acct_ip_hit = await _rate_limited(f"pwreset:acct:{username.lower()}:{ip or '-'}")
+    acct_hit = await _rate_limited(f"pwreset:acct_all:{username.lower()}", ACCOUNT_GLOBAL_LIMIT_PER_HOUR)
+    ip_hit = await _rate_limited(f"pwreset:ip:{ip or '-'}", RATE_LIMIT_PER_HOUR * 5)
+    return acct_ip_hit or acct_hit or ip_hit
 
 
 async def issue_token(db: AsyncSession, user: User, *, requested_ip: str | None) -> str:
@@ -72,7 +78,11 @@ async def consume_token(db: AsyncSession, raw_token: str) -> User | None:
     the API response cannot be used to enumerate valid tokens."""
     now = datetime.now(timezone.utc)
     row = (
-        await db.execute(select(PasswordResetToken).where(PasswordResetToken.token_hash == _hash(raw_token)))
+        await db.execute(select(PasswordResetToken)
+            .where(PasswordResetToken.token_hash == _hash(raw_token))
+            # Row lock: two concurrent confirms must not both see used_at IS NULL.
+            .with_for_update()
+        )
     ).scalar_one_or_none()
     if row is None or row.used_at is not None or row.expires_at < now:
         return None

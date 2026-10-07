@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
+from app.core.sql import LIKE_ESCAPE, like_contains
 from app.core.redis import get_redis
 from app.db.session import SessionLocal, get_db
 from app.intel import feeds
@@ -97,7 +98,7 @@ async def list_iocs(
     if is_active is not None:
         stmt = stmt.where(Ioc.is_active == is_active)
     if q:
-        stmt = stmt.where(Ioc.indicator.ilike(f"%{q}%"))
+        stmt = stmt.where(Ioc.indicator.ilike(like_contains(q), escape=LIKE_ESCAPE))
 
     stmt = stmt.order_by(Ioc.last_seen.desc()).limit(limit).offset(offset)
     rows = (await db.execute(stmt)).scalars().all()

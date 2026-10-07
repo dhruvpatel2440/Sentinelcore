@@ -12,6 +12,8 @@ import statistics
 from datetime import datetime
 
 from sqlalchemy import select
+
+from app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.correlation.matching import apply_match, group_key_for
@@ -26,7 +28,7 @@ async def evaluate(
 ) -> tuple[list[Candidate], int]:
     stmt = select(Event).where(Event.ts >= window_start, Event.ts < window_end)
     stmt = apply_match(stmt, rule.match)
-    stmt = stmt.order_by(Event.ts.asc())
+    stmt = stmt.order_by(Event.ts.asc()).limit(settings.correlation_max_events_per_rule)
 
     rows = (await db.execute(stmt)).scalars().all()
 

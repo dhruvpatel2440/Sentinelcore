@@ -20,16 +20,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import client_ip, get_current_user
 from app.core.config import settings
 from app.core.security import (
     TokenError,
     create_access_token,
     create_refresh_token,
     decode_token,
+    ahash_password,
+    averify_password,
     hash_password,
     needs_rehash,
-    verify_password,
 )
 from app.db.session import get_db
 from app.email import recipients as email_recipients
@@ -125,10 +126,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip() or None
-    return request.client.host if request.client else None
+    return client_ip(request)
 
 
 def _token_response(user: User) -> TokenResponse:
@@ -172,11 +170,11 @@ async def login(
     user = result.scalar_one_or_none()
 
     if user is not None:
-        password_ok = verify_password(payload.password, user.password_hash)
+        password_ok = await averify_password(payload.password, user.password_hash)
     else:
         # Burn an equivalent Argon2 verification and discard it, so an unknown
         # username takes the same wall-clock time as a wrong password.
-        verify_password(payload.password, _DUMMY_HASH)
+        await averify_password(payload.password, _DUMMY_HASH)
         password_ok = False
 
     if user is None or not password_ok or not user.is_active:
@@ -201,7 +199,7 @@ async def login(
 
     # Opportunistically upgrade hashes when Argon2 parameters have moved on.
     if needs_rehash(user.password_hash):
-        user.password_hash = hash_password(payload.password)
+        user.password_hash = await ahash_password(payload.password)
 
     await login_throttle.clear(payload.username, ip)
     user.last_login_at = datetime.now(timezone.utc)

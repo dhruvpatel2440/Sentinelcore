@@ -5,6 +5,7 @@ Argon2id is mandated by CLAUDE.md. Never swap this for bcrypt/sha*.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
@@ -34,6 +35,16 @@ def verify_password(password: str, password_hash: str) -> bool:
         return True
     except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
+
+
+async def ahash_password(password: str) -> str:
+    """Argon2 is deliberately slow (tens of ms of CPU); run it off the event
+    loop so one login does not stall every other in-flight request."""
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def averify_password(password: str, password_hash: str) -> bool:
+    return await asyncio.to_thread(verify_password, password, password_hash)
 
 
 def needs_rehash(password_hash: str) -> bool:

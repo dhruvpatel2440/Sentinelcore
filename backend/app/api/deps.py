@@ -93,3 +93,20 @@ def require_role(*roles: str | UserRole) -> Callable[..., Awaitable[User]]:
 def get_request(request: Request) -> Request:
     """Explicit dependency so audit calls can take the request uniformly."""
     return request
+
+
+def client_ip(request: Request) -> str | None:
+    """Caller IP as seen by the reverse proxy.
+
+    nginx appends the address it actually received the connection from to
+    `X-Forwarded-For`, so the RIGHTMOST entry is the only one a client cannot
+    forge. The leftmost entries are whatever the client chose to send — using
+    them let an attacker rotate a fake IP per request to dodge login and
+    password-reset throttling.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        last = forwarded.split(",")[-1].strip()
+        if last:
+            return last
+    return request.client.host if request.client else None

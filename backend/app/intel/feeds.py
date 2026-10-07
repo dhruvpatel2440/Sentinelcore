@@ -8,11 +8,15 @@ normalized before it ever reaches the `ioc` table.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
+import ipaddress
 import json
 import logging
+import socket
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 import redis.asyncio as aioredis
@@ -64,23 +68,54 @@ class FeedFetchError(Exception):
     pass
 
 
+MAX_REDIRECTS = 5
+
+
+async def _assert_public_url(url: str) -> None:
+    """SSRF guard: feeds must be plain http(s) to a PUBLIC address. Without
+    this an admin-supplied URL (or a redirect from a feed) could make the
+    worker probe localhost, the docker network, or cloud metadata endpoints."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise FeedFetchError("feed URL must be http(s) with a hostname")
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(parts.hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise FeedFetchError(f"cannot resolve feed host {parts.hostname}") from exc
+    for info in infos:
+        addr = ipaddress.ip_address(info[4][0])
+        if not addr.is_global:
+            raise FeedFetchError(f"feed host {parts.hostname} resolves to a non-public address ({addr})")
+
+
 async def _fetch_body(url: str) -> str:
     """Stream the response so a feed cannot be a decompression/size bomb."""
     max_bytes = settings.intel_feed_max_response_mb * 1024 * 1024
     timeout = httpx.Timeout(settings.intel_feed_timeout_seconds)
 
-    # verify=True (the default) enforces certificate validation.
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        async with client.stream("GET", url) as response:
-            response.raise_for_status()
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in response.aiter_bytes():
-                total += len(chunk)
-                if total > max_bytes:
-                    raise FeedFetchError(f"response exceeded {settings.intel_feed_max_response_mb}MB cap")
-                chunks.append(chunk)
-    return b"".join(chunks).decode("utf-8", errors="replace")
+    # verify=True (the default) enforces certificate validation. Redirects are
+    # followed by hand so every hop is re-checked by the SSRF guard.
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        for _ in range(MAX_REDIRECTS + 1):
+            await _assert_public_url(url)
+            async with client.stream("GET", url) as response:
+                if response.is_redirect:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise FeedFetchError("redirect without Location header")
+                    url = urljoin(url, location)
+                    continue
+                response.raise_for_status()
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise FeedFetchError(f"response exceeded {settings.intel_feed_max_response_mb}MB cap")
+                    chunks.append(chunk)
+                return b"".join(chunks).decode("utf-8", errors="replace")
+    raise FeedFetchError("too many redirects")
 
 
 def _parse_csv(body: str, config: dict) -> list[dict]:

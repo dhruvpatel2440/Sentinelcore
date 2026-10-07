@@ -654,8 +654,10 @@ def test_m11_pcap(admin: Client, analyst: Client, viewer: Client) -> None:
     record("M11", "capture parse always resolves (never stuck in 'parsing')",
            final is not None, f"status={final['status'] if final else 'TIMEOUT'}", "critical")
     if final:
-        record("M11", f"parse outcome recorded as '{final['status']}'", True,
-               f"error={final.get('error')}" if final["status"] == "failed" else "")
+        # Was unconditionally True, so a capture that FAILED to parse still
+        # counted as a pass. The uploaded fixture is a valid capture: it must parse.
+        record("M11", "valid capture parses successfully (status == 'parsed')", final["status"] == "parsed",
+               f"status={final['status']} error={final.get('error')}", "critical")
 
     r = analyst.get(f"/pcap/{pid}/flows")
     record("M11", "flows endpoint responds for an uploaded capture", r.status_code == 200, r.text[:120])

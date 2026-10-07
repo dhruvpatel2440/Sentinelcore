@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
-from app.core.security import hash_password, verify_password
+from app.core.security import ahash_password, averify_password
 from app.db.session import get_db
 from app.email import recipients as email_recipients
 from app.email.render import app_link
@@ -20,7 +20,7 @@ from app.email.types import EmailType
 from app.models.user import User, UserRole
 from app.schemas.auth import UserOut
 from app.schemas.user import PasswordChange, PasswordReset, UserCreate, UserUpdate
-from app.services import audit, password_reset
+from app.services import audit, login_throttle, password_reset
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -80,7 +80,7 @@ async def create_user(
         email=payload.email,
         full_name=payload.full_name,
         role=payload.role,
-        password_hash=hash_password(payload.password),
+        password_hash=await ahash_password(payload.password),
     )
     db.add(user)
     await audit.record(
@@ -122,7 +122,13 @@ async def change_own_password(
     actor: User = Depends(get_current_user),
 ) -> None:
     """Declared before the `/{user_id}` routes so "me" is not parsed as a UUID."""
-    if not verify_password(payload.current_password, actor.password_hash):
+    throttle_key = f"pwchange:{actor.id}"
+    if await login_throttle.is_locked_out(throttle_key, None):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many failed attempts. Try again shortly."
+        )
+    if not await averify_password(payload.current_password, actor.password_hash):
+        await login_throttle.record_failure(throttle_key, None)
         await audit.record(
             db,
             action="user.password_change",
@@ -136,7 +142,8 @@ async def change_own_password(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
         )
 
-    actor.password_hash = hash_password(payload.new_password)
+    await login_throttle.clear(throttle_key, None)
+    actor.password_hash = await ahash_password(payload.new_password)
     actor.tokens_valid_from = datetime.now(timezone.utc)
 
     await audit.record(
@@ -239,7 +246,7 @@ async def reset_password(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    user.password_hash = hash_password(payload.new_password)
+    user.password_hash = await ahash_password(payload.new_password)
     user.tokens_valid_from = datetime.now(timezone.utc)
 
     await audit.record(

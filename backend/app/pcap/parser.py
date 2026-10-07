@@ -380,41 +380,67 @@ def _consume_line(line: str, result: ParseResult, seen_values: dict[str, set[str
 # ---------------------------------------------------------------------------
 
 
+# Interactive tshark calls (packet listing / follow) are attacker-input
+# processing started by any authenticated user. Cap how many run at once so
+# a few clicks (or a script) cannot spawn dozens of CPU-hungry tshark
+# processes inside the API container.
+_INTERACTIVE_SLOTS = asyncio.Semaphore(2)
+
+
+async def _kill(proc: asyncio.subprocess.Process) -> None:
+    if proc.returncode is None:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+    await proc.wait()
+
+
 async def list_packets_for_flow(path: Path, protocol: str, stream_id: int, *, limit: int, offset: int) -> list[dict]:
     _require_binaries()
+    if protocol not in ("tcp", "udp"):
+        raise ParseError("packet listing is only supported for tcp/udp streams")
     display_filter = f"{protocol}.stream eq {stream_id}"
     argv = [
         TSHARK_PATH, "-r", str(path), "-n", "-Y", display_filter, "-T", "fields",
         "-E", "separator=\t",
         "-e", "frame.number", "-e", "frame.time_epoch", "-e", "frame.len", "-e", "_ws.col.Protocol", "-e", "_ws.col.Info",
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, preexec_fn=_limit_resources
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=settings.pcap_parse_timeout_seconds)
-    except asyncio.TimeoutError as exc:
-        proc.kill()
-        await proc.wait()
-        raise ParseError("packet listing timed out") from exc
-    if proc.returncode != 0:
-        raise ParseError(f"tshark failed: {stderr.decode(errors='replace')[:500]}")
+    packets: list[dict] = []
 
-    packets = []
-    for i, line in enumerate(stdout.decode(errors="replace").splitlines()):
-        if i < offset:
-            continue
-        if len(packets) >= limit:
-            break
-        cols = line.split("\t")
-        if len(cols) < 5:
-            continue
-        packets.append(
-            {
-                "frame_number": _to_int(cols[0]), "ts": _to_float(cols[1]), "length": _to_int(cols[2]),
-                "protocol": cols[3], "info": cols[4],
-            }
+    async def _read(proc: asyncio.subprocess.Process) -> None:
+        # Stop reading (and kill tshark) as soon as the requested page is
+        # filled, instead of buffering the whole stream's output.
+        index = 0
+        assert proc.stdout is not None
+        while len(packets) < limit:
+            raw = await proc.stdout.readline()
+            if not raw:
+                return
+            if index < offset:
+                index += 1
+                continue
+            index += 1
+            cols = raw.decode(errors="replace").rstrip("\n").split("\t")
+            if len(cols) < 5:
+                continue
+            packets.append(
+                {
+                    "frame_number": _to_int(cols[0]), "ts": _to_float(cols[1]), "length": _to_int(cols[2]),
+                    "protocol": cols[3], "info": cols[4],
+                }
+            )
+
+    async with _INTERACTIVE_SLOTS:
+        proc = await asyncio.create_subprocess_exec(
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, preexec_fn=_limit_resources
         )
+        try:
+            await asyncio.wait_for(_read(proc), timeout=settings.pcap_parse_timeout_seconds)
+        except asyncio.TimeoutError as exc:
+            raise ParseError("packet listing timed out") from exc
+        finally:
+            await _kill(proc)
     return packets
 
 
@@ -426,20 +452,30 @@ async def follow_stream(path: Path, protocol: str, stream_id: int) -> dict:
     if protocol not in ("tcp", "udp"):
         raise ParseError("follow is only supported for tcp/udp streams")
     argv = [TSHARK_PATH, "-r", str(path), "-n", "-q", "-z", f"follow,{protocol},ascii,{stream_id}"]
-    proc = await asyncio.create_subprocess_exec(
-        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, preexec_fn=_limit_resources
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=settings.pcap_parse_timeout_seconds)
-    except asyncio.TimeoutError as exc:
-        proc.kill()
-        await proc.wait()
-        raise ParseError("follow-stream timed out") from exc
-    if proc.returncode != 0:
-        raise ParseError(f"tshark follow failed: {stderr.decode(errors='replace')[:500]}")
+    async with _INTERACTIVE_SLOTS:
+        proc = await asyncio.create_subprocess_exec(
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, preexec_fn=_limit_resources
+        )
+        try:
+            assert proc.stdout is not None
+            # Read at most one byte past the cap (to detect truncation) rather
+            # than loading the entire follow output into memory first.
+            data = await asyncio.wait_for(
+                proc.stdout.read(MAX_FOLLOW_BYTES * 4 + 1), timeout=settings.pcap_parse_timeout_seconds
+            )
+            truncated_raw = len(data) > MAX_FOLLOW_BYTES * 4
+            if not truncated_raw:
+                await asyncio.wait_for(proc.wait(), timeout=settings.pcap_parse_timeout_seconds)
+                if proc.returncode != 0:
+                    err = (await proc.stderr.read(2000)).decode(errors="replace") if proc.stderr else ""
+                    raise ParseError(f"tshark follow failed: {err[:500]}")
+        except asyncio.TimeoutError as exc:
+            raise ParseError("follow-stream timed out") from exc
+        finally:
+            await _kill(proc)
 
-    content = stdout.decode("utf-8", errors="replace")
-    truncated = len(content) > MAX_FOLLOW_BYTES
-    if truncated:
+    content = data.decode("utf-8", errors="replace")
+    truncated = truncated_raw or len(content) > MAX_FOLLOW_BYTES
+    if len(content) > MAX_FOLLOW_BYTES:
         content = content[:MAX_FOLLOW_BYTES]
     return {"content": content, "truncated": truncated}

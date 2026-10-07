@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, require_role
+from app.core.sql import LIKE_ESCAPE, like_contains
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.asset import Asset, AssetPort, PortState
@@ -133,13 +134,13 @@ async def list_assets(
         # Parameterised LIKE — the pattern is a bound parameter, never
         # concatenated into SQL. INET is cast to text so a substring of an
         # address ("192.168.10.") matches.
-        pattern = f"%{q}%"
+        pattern = like_contains(q)
         stmt = stmt.where(
             or_(
-                cast(Asset.ip_address, String).ilike(pattern),
-                Asset.hostname.ilike(pattern),
-                Asset.hostname_override.ilike(pattern),
-                Asset.vendor.ilike(pattern),
+                cast(Asset.ip_address, String).ilike(pattern, escape=LIKE_ESCAPE),
+                Asset.hostname.ilike(pattern, escape=LIKE_ESCAPE),
+                Asset.hostname_override.ilike(pattern, escape=LIKE_ESCAPE),
+                Asset.vendor.ilike(pattern, escape=LIKE_ESCAPE),
             )
         )
 

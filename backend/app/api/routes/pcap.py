@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
+from app.core.sql import LIKE_ESCAPE, like_contains
 from app.core.config import settings
 from app.core.redis import get_redis
 from app.db.session import get_db
@@ -296,7 +297,7 @@ async def list_artifacts(
     if artifact_type:
         stmt = stmt.where(PcapArtifact.artifact_type == artifact_type)
     if q:
-        stmt = stmt.where(PcapArtifact.value.ilike(f"%{q}%"))
+        stmt = stmt.where(PcapArtifact.value.ilike(like_contains(q), escape=LIKE_ESCAPE))
     stmt = stmt.order_by(PcapArtifact.ts.desc().nulls_last()).limit(limit).offset(offset)
     rows = (await db.execute(stmt)).scalars().all()
     return [PcapArtifactOut.model_validate(r, from_attributes=True) for r in rows]

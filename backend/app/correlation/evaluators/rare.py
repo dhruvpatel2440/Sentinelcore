@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
+
+from app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.correlation.matching import GROUP_FIELD_COLUMNS, apply_match, group_key_for
@@ -25,7 +27,7 @@ async def evaluate(
 ) -> tuple[list[Candidate], int]:
     stmt = select(Event).where(Event.ts >= window_start, Event.ts < window_end)
     stmt = apply_match(stmt, rule.match)
-    stmt = stmt.order_by(Event.ts.asc())
+    stmt = stmt.order_by(Event.ts.asc()).limit(settings.correlation_max_events_per_rule)
 
     rows = (await db.execute(stmt)).scalars().all()
 
@@ -38,17 +40,24 @@ async def evaluate(
     frequency_floor = rule.params["frequency_floor"]
     baseline_start = window_end - timedelta(days=baseline_days)
 
+    # ONE grouped query for every group's baseline, instead of one COUNT per
+    # group (which scaled with the number of distinct sources in the window).
+    group_cols = [GROUP_FIELD_COLUMNS[f] for f in rule.group_by]
+    baseline_stmt = (
+        select(*group_cols, func.count())
+        .select_from(Event)
+        .where(Event.ts >= baseline_start, Event.ts < window_end)
+        .group_by(*group_cols)
+    )
+    baseline_stmt = apply_match(baseline_stmt, rule.match)
+    baseline_counts: dict[str, int] = {}
+    for *values, count in (await db.execute(baseline_stmt)).all():
+        k = "|".join(f"{f}={v}" for f, v in zip(rule.group_by, values))
+        baseline_counts[k] = int(count)
+
     candidates: list[Candidate] = []
     for key, events in groups.items():
-        sample = events[0]
-        baseline_stmt = select(func.count()).select_from(Event).where(
-            Event.ts >= baseline_start, Event.ts < window_end
-        )
-        baseline_stmt = apply_match(baseline_stmt, rule.match)
-        for field in rule.group_by:
-            baseline_stmt = baseline_stmt.where(GROUP_FIELD_COLUMNS[field] == getattr(sample, field))
-
-        baseline_count = int(await db.scalar(baseline_stmt) or 0)
+        baseline_count = baseline_counts.get(key, 0)
 
         if baseline_count > frequency_floor:
             continue

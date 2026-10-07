@@ -10,7 +10,7 @@ docs/threat-model.md).
 
     python3 sample_stats.py --duration 1800 --interval 10 --out idle.csv
 
-No shell=True: the docker CLI is invoked as an argv list.
+No shell is ever used: the docker CLI is invoked as an argv list.
 """
 
 from __future__ import annotations

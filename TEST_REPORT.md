@@ -27,6 +27,8 @@ Browser suite:  53 / 53  passed
 TOTAL:         210 / 210 passed
 ```
 
+> **Correction (audit fix):** the M11 check "parse outcome recorded as ..." in `backend/scripts/e2e_test.py` was hardcoded to pass, so a capture that failed to parse still counted. It now asserts `status == "parsed"`. The 157/157 and 210/210 totals above predate this fix and must be re-run against the live stack to be trusted.
+
 ## Bugs found and fixed
 
 Testing this way — hitting the real stack instead of trusting that "the code looks right" — surfaced **5 real bugs**, all now fixed and re-verified:

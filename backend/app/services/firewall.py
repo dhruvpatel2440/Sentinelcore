@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as aioredis
 from fastapi import Request
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
@@ -60,6 +60,9 @@ def remaining_seconds(action: FirewallAction) -> int | None:
     return max(0, int(delta))
 
 
+_MAX_BLOCKS_LOCK_KEY = 0x53454E54  # arbitrary, app-wide constant
+
+
 async def _active_count(db: AsyncSession) -> int:
     return int(
         await db.scalar(
@@ -82,6 +85,9 @@ async def precheck(target: str) -> FirewallPrecheckResult:
 async def apply(
     db: AsyncSession, *, payload: FirewallActionCreate, user: User, request: Request | None = None
 ) -> FirewallAction:
+    # Serialise the count-then-insert: without this, N concurrent requests all
+    # read "99 active" and all insert. Transaction-scoped, released on commit.
+    await db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _MAX_BLOCKS_LOCK_KEY})
     active = await _active_count(db)
     if active >= settings.max_active_blocks:
         raise MaxActiveBlocksReached(f"{active} active blocks already exist (limit {settings.max_active_blocks})")

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from app.core.redis import get_redis
 from app.db.session import get_db
 from app.models.event import Event
 from app.models.user import User
+from app.services import audit
 from app.pipeline.partitions import list_partitions
 from app.pipeline.retention import enforce_retention
 from app.pipeline.tailer import METRICS_KEY, STREAM_KEY
@@ -155,12 +156,20 @@ async def pipeline_status(
 
 @router.post("/retention/run")
 async def run_retention(
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role("admin")),
+    actor: User = Depends(require_role("admin")),
 ) -> dict:
     """Manually trigger a retention pass. The worker also does this daily."""
     try:
-        return await enforce_retention(db)
+        result = await enforce_retention(db)
+        # Drops event partitions — destructive, so it must leave an audit trail.
+        await audit.record(
+            db, action="pipeline.retention_run", user=actor, resource_type="events",
+            detail={"dropped": result.get("dropped"), "retained": result.get("retained_for_incidents")}, request=request,
+        )
+        await db.commit()
+        return result
     except Exception as exc:  # noqa: BLE001
         logger.exception("retention run failed")
         raise HTTPException(

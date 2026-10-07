@@ -1,6 +1,7 @@
 from functools import cached_property
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +47,8 @@ class Settings(BaseSettings):
     correlation_lookback_grace_seconds: int = 60
     correlation_rule_timeout_seconds: int = 60
     correlation_max_concurrent_rules: int = 4
+    # Hard ceiling on events a rare/beacon rule loads into memory per run.
+    correlation_max_events_per_rule: int = 200_000
     correlation_candidates_channel: str = "correlation:candidates"
 
     # M8 — incident promotion
@@ -109,6 +112,18 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def _refuse_default_secret_in_production(self) -> "Settings":
+        """A deployment that never edited SECRET_KEY would sign JWTs with a
+        publicly known string, letting anyone mint an admin token. Fail closed."""
+        if self.is_production and (
+            self.secret_key == "dev-only-placeholder-change-in-env" or len(self.secret_key) < 32
+        ):
+            raise ValueError(
+                "SECRET_KEY must be set to a unique value of at least 32 characters when ENVIRONMENT=production"
+            )
+        return self
 
     @property
     def is_production(self) -> bool:

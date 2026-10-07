@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
+from app.api.deps import client_ip
+from app.core.security import ahash_password
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.password_reset import PasswordResetAccepted, PasswordResetConfirm, PasswordResetRequest
@@ -21,10 +22,7 @@ router = APIRouter(prefix="/auth/password-reset", tags=["auth"])
 
 
 def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip() or None
-    return request.client.host if request.client else None
+    return client_ip(request)
 
 
 @router.post("/request", response_model=PasswordResetAccepted)
@@ -73,7 +71,7 @@ async def confirm_reset(
         # didn't exist" from "token expired" from "token already used".
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
 
-    user.password_hash = hash_password(payload.new_password)
+    user.password_hash = await ahash_password(payload.new_password)
     user.tokens_valid_from = datetime.now(timezone.utc)
 
     await audit.record(

@@ -45,8 +45,8 @@ def _iptables(args: list[str], *, exclusive: bool = True):
 
 
 def ensure_chain() -> None:
-    """Idempotently create the SENTINELCORE chain and jump to it from INPUT
-    and FORWARD. Called at helper startup and defensively before every
+    """Idempotently create the SENTINELCORE chain and jump to it from INPUT,
+    FORWARD and OUTPUT. Called at helper startup and defensively before every
     mutating op, since rules are deliberately not persisted across restarts."""
     iptables = _require_iptables()
 
@@ -54,7 +54,9 @@ def ensure_chain() -> None:
     if create.returncode != 0 and "already exists" not in create.stderr.lower():
         raise ExecutionError("chain_setup_failed", f"could not create chain: {create.stderr.strip()[:300]}")
 
-    for parent in ("INPUT", "FORWARD"):
+    # OUTPUT matters for "outbound" blocks: traffic this host itself sends to a
+    # blocked destination never traverses INPUT/FORWARD.
+    for parent in ("INPUT", "FORWARD", "OUTPUT"):
         check = run(
             [iptables, "-C", parent, "-j", config.fw_chain], timeout=config.fw_op_timeout_seconds, exclusive=True
         )

@@ -19,6 +19,7 @@ import redis.asyncio as aioredis
 from sqlalchemy import Text, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.sql import LIKE_ESCAPE, like_contains
 from app.models.event import Severity
 from app.models.ioc import Ioc, IocType
 
@@ -318,10 +319,25 @@ async def retrohunt(
             Event.ts >= since,
             (Event.src_ip == ioc.indicator) | (Event.dst_ip == ioc.indicator)
             if ioc.ioc_type == IocType.IP
-            else cast(Event.raw, Text).ilike(f"%{ioc.indicator}%"),
+            else cast(Event.raw, Text).ilike(like_contains(ioc.indicator), escape=LIKE_ESCAPE),
         )
         events = (await db.execute(stmt.limit(10_000))).scalars().all()
+        # Re-running a retrohunt must not stack duplicate matches for the
+        # same (ioc, event) pair.
+        already = set()
+        if events:
+            already = set(
+                (
+                    await db.execute(
+                        select(IocMatch.event_id).where(
+                            IocMatch.ioc_id == ioc.id, IocMatch.event_id.in_([e.id for e in events])
+                        )
+                    )
+                ).scalars()
+            )
         for event in events:
+            if event.id in already:
+                continue
             if ioc.ioc_type == IocType.IP:
                 matched_field = "src_ip" if event.src_ip == ioc.indicator else "dst_ip"
             else:
